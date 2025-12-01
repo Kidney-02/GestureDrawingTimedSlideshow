@@ -5,8 +5,10 @@ from PySide6.QtWidgets import (
     QLabel, QLineEdit, QPushButton, QSizePolicy
 )
 
-from PySide6.QtCore import QTimer, QSettings, Qt
+from PySide6.QtCore import QSettings, Qt
 from PySide6.QtGui import QIntValidator
+
+from PreviewZone import *
 
 
 class MainWindow(QMainWindow):
@@ -22,7 +24,7 @@ class MainWindow(QMainWindow):
         # Slideshow Settings
         self.count = 10
         self.time = 10
-
+        
 
         self.load_settings()
 
@@ -47,7 +49,8 @@ class MainWindow(QMainWindow):
         
       
 
-        # --- Section 1: Slideshow Controls 
+        # --- Section 1: Slideshow Controls ---
+
         control_group = QWidget()
         control_layout = QHBoxLayout(control_group)
         control_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
@@ -76,14 +79,12 @@ class MainWindow(QMainWindow):
         
 
         main_layout.addWidget(control_group)
-        main_layout.addWidget(self.create_separator())
+        # main_layout.addWidget(self.create_separator())
+        main_layout.addSpacerItem()
 
-        # --- Section 2: Image Drop Zone ---
-        drop_zone_label = QLabel("Image Thumbnail Grid (Drop Files Here)")
-        drop_zone_label.setStyleSheet("font-size: 12pt; font-weight: bold; margin-top: 10px;")
-        main_layout.addWidget(drop_zone_label)
+        # --- Section 2: Image Preview Zone ---
         
-        self.image_drop_widget = QWidget() ## TEMP
+        self.image_drop_widget = PreviewZone() ## TEMP
         # self.image_drop_widget = ImageDropWidget()
         # Pass the method reference for file list update
         # self.image_drop_widget.update_main_window_list = self._update_image_files
@@ -105,11 +106,12 @@ class MainWindow(QMainWindow):
             self.count = self.settings.value("count")
             self.time = self.settings.value("time")
 
-            print(self.count, self.time)
-
         else:
-            # Fallback geometry if no settings are found
+            # Default settings
             self.setGeometry(100, 100, 700, 500) 
+            self.count = 10
+            self.time = 10
+
 
             
 
