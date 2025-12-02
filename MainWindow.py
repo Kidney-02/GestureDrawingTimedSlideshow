@@ -5,19 +5,19 @@ from PySide6.QtWidgets import (
     QLabel, QLineEdit, QPushButton, QSizePolicy
 )
 
-from PySide6.QtCore import QSettings, Qt
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QIntValidator
 
 from PreviewZone import *
+from Settings import *
 
 
 class MainWindow(QMainWindow):
     def __init__(self,):
         super().__init__()
         
-        # --- QSettings setup ---
-        self.app_name = "ImageSlideshow"
-        self.settings = QSettings("orgName", "appName")
+
+
         
         self.setWindowTitle("Image Slideshow")
 
@@ -25,9 +25,9 @@ class MainWindow(QMainWindow):
         self.count = 10
         self.time = 10
         
-
+        # --- QSettings setup ---
+        self.settings = Settings()
         self.load_settings()
-
 
 
         validator = QIntValidator(1, 100)
@@ -85,6 +85,8 @@ class MainWindow(QMainWindow):
         # --- Section 2: Image Preview Zone ---
         
         self.image_drop_widget = PreviewZone() ## TEMP
+        self.image_drop_widget.load_settings(self.settings.settings_load())
+
         # self.image_drop_widget = ImageDropWidget()
         # Pass the method reference for file list update
         # self.image_drop_widget.update_main_window_list = self._update_image_files
@@ -92,6 +94,9 @@ class MainWindow(QMainWindow):
         self.image_drop_widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         main_layout.addWidget(self.image_drop_widget)
 
+
+
+        
         
 
         self.setCentralWidget(main_widget)
@@ -101,31 +106,41 @@ class MainWindow(QMainWindow):
     def load_settings(self):
         """Loads window geometry count and time from QSettings."""
         
-        if self.settings is not None:
-            self.restoreGeometry(self.settings.value("geometry"))
-            self.count = self.settings.value("count")
-            self.time = self.settings.value("time")
+        settings = self.settings.settings_load()
+
+        # print(settings)
+
+        if settings is not None:
+
+            
+            self.restoreGeometry(settings.value("geometry"))
+            self.count = settings.value("count")
+            self.time = settings.value("time")
 
         else:
-            # Default settings
-            self.setGeometry(100, 100, 700, 500) 
-            self.count = 10
-            self.time = 10
+            return
+            print("very sad")
+
+
 
 
             
 
     def closeEvent(self, event):
         """Saves window geometry to QSettings and closes the secondary window."""
-        # if self.timer.isActive():
-        #     self.timer.stop()
-        
-        # Close the secondary window gracefully
-        # self.slideshow_window.close()
-        
-        self.settings.setValue("geometry", self.saveGeometry())
-        self.settings.setValue("count", self.count_input.text())
-        self.settings.setValue("time", self.time_input.text())
+        # print(self.saveGeometry())
+
+        settings = {
+            "geometry": self.saveGeometry(),
+            "count": self.count_input.text(),
+            "time": self.time_input.text()
+        }
+
+        # print(settings)
+        settings.update(self.image_drop_widget.save_settings())
+        self.settings.settings_save(settings)
+
+
 
         event.accept()
 
