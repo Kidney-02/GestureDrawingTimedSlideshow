@@ -1,5 +1,3 @@
-
-
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QPushButton, QSizePolicy
@@ -71,11 +69,52 @@ class MainWindow(QMainWindow):
 
         # Start Button
         self.start_button = QPushButton("Start Session")
-        self.start_button.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold;")
+        self.start_button.setStyleSheet("""
+            QWidget {
+                color: white; font-weight: bold;
+            }
+            QPushButton {
+                background-color: #4CAF50; 
+            }
+            QPushButton:hover {
+                background-color: #66BB6A;
+            }    
+            QPushButton:pressed {
+                background-color: #388E3C;
+            }                                        
+        """
+        )
+            
+        self.start_button.setMaximumWidth(100)
         # self.start_button.clicked.connect(self.start_slideshow)
         control_layout.addWidget(self.start_button)
 
+
+        # Clear Button
+        self.clear_button = QPushButton("Clear Images")
+        self.clear_button.setStyleSheet("""
+            QWidget {
+                color: white; font-weight: bold;
+            }
+            QPushButton {
+                background-color: #555; 
+            }
+            QPushButton:hover {
+                background-color: #666;
+            }    
+            QPushButton:pressed {
+                background-color: #444;
+            }                                        
+        """
+        )
+        self.clear_button.setMaximumWidth(100)
+
         control_layout.addStretch(1)
+
+        control_layout.addWidget(self.clear_button)
+
+
+        
         
 
         main_layout.addWidget(control_group)
@@ -86,6 +125,8 @@ class MainWindow(QMainWindow):
         
         self.image_drop_widget = PreviewZone() ## TEMP
         self.image_drop_widget.load_settings(self.settings.settings_load())
+        # connect clear button to the clear image files function
+        self.clear_button.clicked.connect(self.image_drop_widget.clear_image_files)
 
         # self.image_drop_widget = ImageDropWidget()
         # Pass the method reference for file list update

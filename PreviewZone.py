@@ -79,6 +79,7 @@ class PreviewZone(QWidget):
 
         # Store file paths to allow redrawing on resize
         self.image_files = []
+        self.image_cache = {}
         
         # Image Size Control Attributes
         self.min_size = 50
@@ -195,8 +196,6 @@ class PreviewZone(QWidget):
                 if file_path not in self.image_files:
                     self.image_files.append(file_path)
 
-        
-
         if self.update_main_window_list:
              self.update_main_window_list(self.image_files)
 
@@ -214,21 +213,20 @@ class PreviewZone(QWidget):
         """
         Calculates the new maximum number of columns and rebuilds the grid.
         """
+
+        ### Large Images make the app lag on resize ###################################
         if not self.image_files:
+            self.clear_images()
             return
         
         
         available_width = self.get_available_width()
-        self.item_width = self.get_item_width()
-
-        print(available_width, self.item_width)
         
         if available_width >= self.item_width:
             new_columns = max(1, available_width // self.item_width)
         else:
             new_columns = 1
 
-        print(new_columns)
         
         # Only redraw if the number of columns or size has changed
         if new_columns != self.current_columns or self.image_layout.count() == 0 or force_redraw:
@@ -241,6 +239,7 @@ class PreviewZone(QWidget):
                 col = i % self.current_columns
                 self.display_image(file_path, row, col)
 
+
     def clear_images(self):
         """Removes all image widgets from the scroll area."""
         while self.image_layout.count():
@@ -251,29 +250,39 @@ class PreviewZone(QWidget):
     def display_image(self, file_path, row, col):
         """Loads, resizes, and displays an image from the given path in a specific grid cell."""
         
-        try:
-            pil_image = Image.open(file_path)
-            pil_image.thumbnail((self.thumbnail_size, self.thumbnail_size))
-            q_image = ImageQt.toqpixmap(pil_image)
+        # Check cache for image
+        if file_path in self.image_cache:            
+            pil_image = self.image_cache[file_path].copy()
+        else:
+            try:
+                pil_image = Image.open(file_path)
+                pil_image.thumbnail((self.max_size, self.max_size))
+                # Cache Image
+                self.image_cache[file_path] = pil_image
+            except Exception as e:
+                print(f"Error loading image {file_path}: {e}")
+                return
+        
+        # image_copy = pil_image.copy()
+        pil_image.thumbnail((self.thumbnail_size, self.thumbnail_size))
+        q_image = ImageQt.toqpixmap(pil_image)
+
+
+        image_label = QLabel()
+        image_label.setPixmap(q_image)
+        image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        image_container = QWidget()
+        image_container.setStyleSheet("border: none; padding: 0px")
+        image_container.setFixedSize(self.item_width, self.item_width) 
+        
+        container_layout = QVBoxLayout(image_container)
+        container_layout.setAlignment(Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignCenter)
+        container_layout.addWidget(image_label)
+
+        self.image_layout.addWidget(image_container, row, col)
+        # print(self.thumbnail_size, self.item_width)
             
-            image_label = QLabel()
-            image_label.setPixmap(q_image)
-            image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            
-            
-            # Container fixed size uses thumbnail size for a tighter grid
-            image_container = QWidget()
-            image_container.setStyleSheet("border: none; padding: 0px")
-            image_container.setFixedSize(self.item_width, self.item_width) 
-            
-            container_layout = QVBoxLayout(image_container)
-            container_layout.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignCenter)
-            container_layout.addWidget(image_label)
-            
-            self.image_layout.addWidget(image_container, row, col)
-            
-        except Exception as e:
-            print(f"Error loading image {file_path}: {e}")
 
     def get_available_width(self) -> int: 
         return self.scroll_area.viewport().width() - 20
@@ -287,7 +296,6 @@ class PreviewZone(QWidget):
 
         # Check if the Ctrl key is pressed
         if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
-
 
             delta = event.angleDelta().y()
             new_size = self.thumbnail_size
@@ -307,14 +315,12 @@ class PreviewZone(QWidget):
                 # Recalculate item width based on the new thumbnail size
                 self.item_width = self.get_item_width()
 
-                # print(self.thumbnail_size)
-                
                 # Rebuild the grid with the new size and updated column count
-
+                self.recalculate_and_redraw(True)
                 
                 event.accept()
             else:
-                event.accept() 
+                event.ignore() 
         else:
             # If Ctrl is NOT pressed, pass the event up to the scroll area 
             event.ignore() 
@@ -325,6 +331,8 @@ class PreviewZone(QWidget):
     # --- Resize Event ---
     def resizeEvent(self, event):
         """Ensure the overlay is resized and positioned whenever the parent resizes."""
+        
+        # self.item_width = self.get_item_width()
         self.recalculate_and_redraw()
         self.overlay.update_parent_geometry()
         
@@ -334,7 +342,6 @@ class PreviewZone(QWidget):
     def load_settings(self, settings):
         """Loads window geometry count and time from QSettings."""
         
-
         if settings is not None:
 
             self.image_files = settings.value("images")
@@ -344,8 +351,10 @@ class PreviewZone(QWidget):
             self.recalculate_and_redraw(True)
 
         else:
-            return
+            self.image_files = []
+            self.thumbnail_size = 200
             print("very sad")
+        self.item_width = self.get_item_width()
 
 
     def save_settings(self):
@@ -361,10 +370,13 @@ class PreviewZone(QWidget):
         else :
             settings.update({"image_size": self.thumbnail_size})
 
-        
-        
-
         return settings
+    
+    def clear_image_files(self):
+        self.image_files.clear()
+        self.image_cache.clear()
+        self.recalculate_and_redraw()
+        pass
         
 
 
