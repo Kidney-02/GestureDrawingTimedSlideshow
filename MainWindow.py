@@ -79,8 +79,8 @@ class MainWindow(QMainWindow):
         
 
         main_layout.addWidget(control_group)
-        # main_layout.addWidget(self.create_separator())
-        main_layout.addSpacerItem()
+        main_layout.addWidget(self.create_separator())
+        # main_layout.addSpacerItem()
 
         # --- Section 2: Image Preview Zone ---
         

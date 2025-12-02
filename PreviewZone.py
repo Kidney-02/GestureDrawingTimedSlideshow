@@ -1,10 +1,12 @@
 
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QLabel, QSizePolicy
+    QWidget, QVBoxLayout, QLabel, QSizePolicy,
+    QScrollArea, QGridLayout
 )
 
-from PySide6.QtCore import QSettings, Qt
 
+from PySide6.QtGui import QDragEnterEvent, QDropEvent, QWheelEvent
+from PySide6.QtCore import QSettings, Qt
 
 class PreviewZone(QWidget):
     """
@@ -16,9 +18,14 @@ class PreviewZone(QWidget):
 
     def __init__(self):
         super().__init__()
+
+        # Drag n Drop area styles
+        self.default_style = "border: 2px dashed #aaa; padding: 20px; color: #555;"
+        self.on_drag_style = "border: 2px dashed #4CAF50; padding: 20px; color: #4CAF50;"
+
         
         # --- Crucial step for Drag-and-Drop ---
-        # self.setAcceptDrops(True)
+        self.setAcceptDrops(True)
         
         # Image Size Control Attributes
         self.min_size = 50
@@ -34,77 +41,80 @@ class PreviewZone(QWidget):
         
         # The minimum width required for one image container (thumbnail_size * 1.2)
         # Note: Reduced multiplier since file name label is removed
-        self.ITEM_WIDTH = int(self.thumbnail_size * 1.1) 
+        self.item_width = int(self.thumbnail_size * 1.1) 
 
         # Main layout for the drop zone
         self.main_layout = QVBoxLayout(self)
 
-        # Drop instruction label
-        self.instruction_label = QLabel(
-            "Drop Image Files Here (PNG, JPG, GIF)", 
-            alignment=Qt.AlignmentFlag.AlignCenter
-        )
-        self.instruction_label.setStyleSheet("border: 2px dashed #aaa; padding: 20px; color: #555;")
-        self.main_layout.addWidget(self.instruction_label)
+      
 
-    #     # Scroll area for displaying images
-    #     self.scroll_area = QScrollArea()
-    #     self.scroll_area.setWidgetResizable(True)
-    #     self.scroll_area.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-    #     self.scroll_area.setStyleSheet("border: 1px solid #ddd; background-color: #f0f0f0;")
+        # Scroll area for displaying images
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.reset_dragndrop_style()
         
-    #     # Inner widget that holds the image QGridLayout layout
-    #     self.image_container_widget = QWidget()
-    #     self.image_layout = QGridLayout(self.image_container_widget)
-    #     self.image_layout.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft) 
-    #     self.scroll_area.setWidget(self.image_container_widget)
-        
-    #     self.main_layout.addWidget(self.scroll_area)
 
-    # # --- 1. DnD Step: Check if the dragged item is a file ---
-    # def dragEnterEvent(self, event: QDragEnterEvent):
-    #     """Accepts the drag if it contains acceptable file paths (URIs)."""
-    #     if event.mimeData().hasUrls():
-    #         can_accept = any(
-    #             url.isLocalFile() and url.toLocalFile().lower().endswith(('.png', '.jpg', '.jpeg', '.gif'))
-    #             for url in event.mimeData().urls()
-    #         )
+        # Inner widget that holds the image QGridLayout layout
+        self.image_container_widget = QWidget()        
+        self.image_container_widget.setStyleSheet("")
+        # self.image_container_widget.setStyleSheet("background-color: black;")
+        self.image_layout = QGridLayout(self.image_container_widget)
+        self.image_layout.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft) 
+        self.scroll_area.setWidget(self.image_container_widget)
+        
+        self.main_layout.addWidget(self.scroll_area)
+
+
+    # --- 1. DnD Step: Check if the dragged item is a file ---
+    def dragEnterEvent(self, event: QDragEnterEvent):
+        """Accepts the drag if it contains acceptable file paths (URIs)."""
+        if event.mimeData().hasUrls():
+            can_accept = any(
+                url.isLocalFile() and url.toLocalFile().lower().endswith(('.png', '.jpg', '.jpeg', '.gif'))
+                for url in event.mimeData().urls()
+            )
             
-    #         if can_accept:
-    #             event.acceptProposedAction()
-    #             self.instruction_label.setStyleSheet("border: 2px dashed #4CAF50; padding: 20px; color: #4CAF50;")
-    #         else:
-    #             event.ignore()
-    #     else:
-    #         event.ignore()
+            if can_accept:
+                event.acceptProposedAction()
+                self.scroll_area.setStyleSheet(self.on_drag_style)
+            else:
+                event.ignore()
+        else:
+            event.ignore()
 
-    # # Reset border style when dragging leaves
-    # def dragLeaveEvent(self, event):
-    #     self.instruction_label.setStyleSheet("border: 2px dashed #aaa; padding: 20px; color: #555;")
-    #     event.accept()
+    # Reset border style when dragging leaves
+    def dragLeaveEvent(self, event):
+        self.reset_dragndrop_style()
+        event.accept()
 
-    # # --- 2. DnD Step: Process the dropped files ---
-    # def dropEvent(self, event: QDropEvent):
-    #     """Handles the actual drop operation by storing paths and triggering redrawing."""
+    # --- 2. DnD Step: Process the dropped files ---
+    def dropEvent(self, event: QDropEvent):
+        """Handles the actual drop operation by storing paths and triggering redrawing."""
         
-    #     # Clear existing images and stored paths
-    #     self.image_files.clear()
+        # Clear existing images and stored paths
+        self.image_files.clear()
 
-    #     for url in event.mimeData().urls():
-    #         if url.isLocalFile():
-    #             file_path = url.toLocalFile()
-    #             self.image_files.append(file_path)
+        for url in event.mimeData().urls():
+            if url.isLocalFile():
+                file_path = url.toLocalFile()
+                self.image_files.append(file_path)
 
-    #     # CRITICAL FIX: Use the callback to notify the MainWindow
-    #     if self.update_main_window_list:
-    #          self.update_main_window_list(self.image_files)
+        # CRITICAL FIX: Use the callback to notify the MainWindow
+        if self.update_main_window_list:
+             self.update_main_window_list(self.image_files)
 
-    #     # Redraw the grid with the new set of images
-    #     self.recalculate_and_redraw()
+        # Redraw the grid with the new set of images
+        # self.recalculate_and_redraw()
 
-    #     # Reset instruction label style
-    #     self.instruction_label.setStyleSheet("border: 2px dashed #aaa; padding: 20px; color: #555;")
-    #     event.acceptProposedAction()
+        # Reset instruction label style
+        self.reset_dragndrop_style()
+        event.acceptProposedAction()
+
+
+    def reset_dragndrop_style(self):
+        self.scroll_area.setStyleSheet(self.default_style)
+
         
     # # --- Handle Scroll Wheel for Zooming (MODIFIED) ---
     # def wheelEvent(self, event: QWheelEvent):
