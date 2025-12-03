@@ -3,11 +3,14 @@ import random
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QPushButton, QSizePolicy,
-    QStackedWidget
-)
+    QStackedWidget, QApplication
+    )
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QIntValidator, QDragEnterEvent, QDragLeaveEvent, QDropEvent
+from PySide6.QtGui import (
+    QIntValidator, QDragEnterEvent, QDragLeaveEvent, QDropEvent,
+    QPalette
+    )
 
 from PreviewZone import *
 from Settings import *
@@ -23,11 +26,14 @@ class OverlayWidget(QWidget):
         self.color_accept = "background-color: rgba(76, 175, 80, 0.55); border: 2px dashed rgb(76, 175, 80);"
         self.color_reject = "background-color: rgba(220, 82, 80, 0.55); border: 2px dashed rgb(220, 82, 80);"
 
+        self.default_text = "Drop Image Files Here (PNG, JPG, GIF)"
+        self.loading_text = "Loading..."
+        self.warning_text = "No Images To Show"
+            
+
         # Add a message label to the center
-        self.label = QLabel(
-            "Drop Image Files Here (PNG, JPG, GIF)", 
-            alignment=Qt.AlignmentFlag.AlignCenter
-        )
+        self.label = QLabel(self.default_text)
+        self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.label.setStyleSheet("color: white; font-size: 24px;")
         
         layout = QVBoxLayout(self)
@@ -41,15 +47,33 @@ class OverlayWidget(QWidget):
         if self.parentWidget():
             self.setGeometry(self.parentWidget().rect())
 
-    def show(self, accept:bool = True):
-        
-        # 1. Set the background to be translucent green with dashed Border
-        if accept:
+    def show(self, state:int = 1):
+        """
+        0 : "Accept Files",
+        1 : "Reject Files",
+        2 : "No Images",
+        3 : "Loading Images"
+        """
+
+        if state == 0:
             self.setStyleSheet(self.color_accept)
-        else:
+            self.label.setText(self.default_text)
+        elif state == 1:
             self.setStyleSheet(self.color_reject)
+            self.label.setText(self.default_text)
+        elif state == 2:
+            self.setStyleSheet(self.color_reject)
+            self.label.setText(self.warning_text)
+        elif state == 3:
+            self.setStyleSheet(self.color_accept)
+            self.label.setText(self.loading_text)
+
         self.update_geometry()
         super().show()
+
+    def update_opacity(self):
+        print(self.styleSheet())
+        return
 
     def resizeEvent(self, event):
         self.update_geometry()
@@ -200,20 +224,28 @@ class MainWindow(QMainWindow):
 
         
 
-        
-        
-        
-
 
     def start_slide_show(self):
+
+        if not self.image_files:
+
+            self.overlay.show(2)
+            timer = QTimer(self)
+            timer.setSingleShot(True)
+            timer.start(500) # Time In Miliseconds 
+            timer.timeout.connect(self.overlay.hide)
+            
+            
+            #  = QTimer(remainingTime=2)
+            
+            # self.overlay.update_opacity()
+
+            return
 
         self.slide_show.start_slide_show(self.get_slide_show_images(), self.time)
         
         self.stacked_widget.setCurrentIndex(1)
 
-
-        # self.slide_show.show()
-        # self.slide_show.raise_()
         pass
 
 
@@ -222,7 +254,10 @@ class MainWindow(QMainWindow):
 
 
     def get_slide_show_images(self) -> list:
-
+        
+        if not self.image_files:
+            return
+        
         sample = self.image_files.copy()
 
         random.sample(sample, min(int(self.count), len(self.image_files) -1 ))
@@ -248,7 +283,8 @@ class MainWindow(QMainWindow):
             else:
                 event.ignore()
             
-            self.overlay.show(can_accept)
+            # for show True = 1, False = 0
+            self.overlay.show(1 - int(can_accept))
             self.overlay.raise_()
         else:
             event.ignore()
@@ -258,11 +294,15 @@ class MainWindow(QMainWindow):
         # Hide the overlay
         self.overlay.hide()
         super().dragLeaveEvent(event)
-
-
-    def dropEvent(self, event: QDropEvent):
-        """Handles the actual drop operation by storing paths and triggering redrawing."""
         
+
+    def dropEvent(self, event):
+        """Handles the actual drop operation by storing paths and triggering redrawing."""
+
+        self.overlay.show(3)
+        QApplication.processEvents()
+
+
         # Add to the image list and cache thumbnails
         for url in event.mimeData().urls():
             if url.isLocalFile() and url.toLocalFile().lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
@@ -270,7 +310,7 @@ class MainWindow(QMainWindow):
                 if file_path not in self.image_files:
                     self.image_files.append(file_path)
 
-                    
+
         # Reset instruction label style
         self.overlay.hide()
 
@@ -278,6 +318,8 @@ class MainWindow(QMainWindow):
         self.update_image_count()
 
         event.acceptProposedAction()
+
+        return super().dropEvent(event)
 
 
     def resizeEvent(self, event):

@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import( 
     QWidget, QVBoxLayout, QLabel, QSizePolicy,
-    QPushButton
+    QPushButton, QHBoxLayout
     )
 from PySide6.QtGui import QPixmap
 from PySide6.QtCore import Qt, QTimer
@@ -22,12 +22,12 @@ class SlideShowWidget(QWidget):
 
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.setStyleSheet("background-color: rgba(180, 162, 40, 0.55); border: none; margin: 0px; padding: 0px;")
-
+        layout = QVBoxLayout(self)
         
         # Image Display
         self.display_label = QLabel()
 
-        layout = QVBoxLayout(self)
+        
         layout.addWidget(self.display_label)
         
         
@@ -50,7 +50,14 @@ class SlideShowWidget(QWidget):
         )
         self.clear_button.setMaximumWidth(100)
         # self.clear_button.clicked.connect(self._relay_signal)
-        layout.addWidget(self.clear_button)
+
+        control_group = QWidget()
+        control_layout = QHBoxLayout(control_group)
+        control_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        control_layout.addWidget(self.clear_button)
+
+        layout.addWidget(control_group)
 
 
 
