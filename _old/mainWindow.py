@@ -9,7 +9,7 @@ from PySide6.QtGui import QPixmap, QDragEnterEvent, QDropEvent, QWheelEvent
 from PySide6.QtCore import Qt, QSettings, QTimer, QSize
 from PIL import Image, ImageQt
 
-from slideShowWindow import SlideshowWindow
+from SlideShow import SlideshowWindow
 
 
 class ImageDropWidget(QWidget):

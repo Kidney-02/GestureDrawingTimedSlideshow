@@ -13,7 +13,7 @@ from PIL import Image, ImageQt
 
 # import from separate py files
 from mainWindow import MainWindow
-from slideShowWindow import SlideshowWindow
+from SlideShow import SlideshowWindow
 
 
 

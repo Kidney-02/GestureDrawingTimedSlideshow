@@ -1,53 +1,90 @@
+import random
+
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QLineEdit, QPushButton, QSizePolicy
+    QLabel, QLineEdit, QPushButton, QSizePolicy,
+    QStackedWidget
 )
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QIntValidator
+from PySide6.QtGui import QIntValidator, QDragEnterEvent, QDragLeaveEvent, QDropEvent
 
 from PreviewZone import *
 from Settings import *
+from SlideShow import *
+
+
+class OverlayWidget(QWidget):
+    """The widget that will serve as the translucent overlay."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        
+        # Color presets
+        self.color_accept = "background-color: rgba(76, 175, 80, 0.55); border: 2px dashed rgb(76, 175, 80);"
+        self.color_reject = "background-color: rgba(220, 82, 80, 0.55); border: 2px dashed rgb(220, 82, 80);"
+
+        # Add a message label to the center
+        self.label = QLabel(
+            "Drop Image Files Here (PNG, JPG, GIF)", 
+            alignment=Qt.AlignmentFlag.AlignCenter
+        )
+        self.label.setStyleSheet("color: white; font-size: 24px;")
+        
+        layout = QVBoxLayout(self)
+        layout.addWidget(self.label)
+        
+        # Start hidden
+        self.hide() 
+
+    def update_geometry(self):
+        """Called by the parent to ensure the overlay covers the entire area."""
+        if self.parentWidget():
+            self.setGeometry(self.parentWidget().rect())
+
+    def show(self, accept:bool = True):
+        
+        # 1. Set the background to be translucent green with dashed Border
+        if accept:
+            self.setStyleSheet(self.color_accept)
+        else:
+            self.setStyleSheet(self.color_reject)
+        self.update_geometry()
+        super().show()
+
+    def resizeEvent(self, event):
+        self.update_geometry()
+        return super().resizeEvent(event)
 
 
 class MainWindow(QMainWindow):
     def __init__(self,):
         super().__init__()
         
-
-
-        
         self.setWindowTitle("Image Slideshow")
+        self.setAcceptDrops(True)
 
         # Slideshow Settings
         self.count = 10
         self.time = 10
+
+        ### Store file paths and cache thumbnails ###
+        self.image_files:list = []
+        self.image_cache:dict = {} # caches thumbnail for preview
         
         # --- QSettings setup ---
         self.settings = Settings()
         self.load_settings()
 
-
         validator = QIntValidator(1, 100)
 
+                
 
-        
-        # # Instantiate the separate slideshow window
-
-
-        # self.slideshow_window = SlideshowWindow(
-        #     # Pass the stop method as a callback
-        #     close_callback=self._handle_slideshow_close
-        # )
-        # self.slideshow_window.show()
-
-        # Main widget and layout
         main_widget = QWidget()
-        main_layout = QVBoxLayout(main_widget)
-        
-      
+        main_layout = QVBoxLayout(main_widget)  
 
-        # --- Section 1: Slideshow Controls ---
+
+
+        ##### --- Section 1: Slideshow Controls ---
 
         control_group = QWidget()
         control_layout = QHBoxLayout(control_group)
@@ -86,9 +123,34 @@ class MainWindow(QMainWindow):
         )
             
         self.start_button.setMaximumWidth(100)
-        # self.start_button.clicked.connect(self.start_slideshow)
+        self.start_button.clicked.connect(self.start_slide_show)
         control_layout.addWidget(self.start_button)
+        
+        control_layout.addStretch(1)
 
+        
+
+        main_layout.addWidget(control_group)
+        main_layout.addWidget(self.create_separator())
+
+        ##### --- Section 2: Image Preview Zone ---
+             
+        self.preview_zone = PreviewZone()        
+        self.preview_zone.set_image_files(self.image_cache)
+        self.preview_zone.get_item_width()            
+
+        main_layout.addWidget(self.preview_zone)
+
+
+        preview_control_group = QWidget()
+        preview_control_layout = QHBoxLayout(preview_control_group)
+        preview_control_layout.setAlignment(Qt.AlignmentFlag.AlignRight)
+        preview_control_layout.addStretch(1)
+        
+        # Image Count
+        self.count_label = QLabel()
+        self.update_image_count() 
+        preview_control_layout.addWidget(self.count_label)
 
         # Clear Button
         self.clear_button = QPushButton("Clear Images")
@@ -108,40 +170,137 @@ class MainWindow(QMainWindow):
         """
         )
         self.clear_button.setMaximumWidth(100)
+        self.clear_button.clicked.connect(self.clear_image_files)
+        preview_control_layout.addWidget(self.clear_button)
 
-        control_layout.addStretch(1)
 
-        control_layout.addWidget(self.clear_button)
+        main_layout.addWidget(preview_control_group)
 
+ 
+        ##### --- Slide Show ---
+        self.slide_show = SlideShowWidget(self)
+        self.slide_show.hide()
+        
+
+
+        ##### --- Stacked Widget ---
+
+        self.stacked_widget = QStackedWidget()
+
+        self.stacked_widget.addWidget(main_widget)
+        self.stacked_widget.addWidget(self.slide_show)
+
+        self.setCentralWidget(self.stacked_widget)
+
+
+
+        ##### --- The Overlay ---
+        self.overlay = OverlayWidget(self)
+        self.overlay.hide() # Set overlay hidden on Start
+
+        
 
         
         
-
-        main_layout.addWidget(control_group)
-        main_layout.addWidget(self.create_separator())
-        # main_layout.addSpacerItem()
-
-        # --- Section 2: Image Preview Zone ---
-        
-        self.image_drop_widget = PreviewZone() ## TEMP
-        self.image_drop_widget.load_settings(self.settings.settings_load())
-        # connect clear button to the clear image files function
-        self.clear_button.clicked.connect(self.image_drop_widget.clear_image_files)
-
-        # self.image_drop_widget = ImageDropWidget()
-        # Pass the method reference for file list update
-        # self.image_drop_widget.update_main_window_list = self._update_image_files
-        
-        self.image_drop_widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        main_layout.addWidget(self.image_drop_widget)
-
-
-
-        
         
 
-        self.setCentralWidget(main_widget)
 
+    def start_slide_show(self):
+
+        self.slide_show.start_slide_show(self.get_slide_show_images(), self.time)
+        
+        self.stacked_widget.setCurrentIndex(1)
+
+
+        # self.slide_show.show()
+        # self.slide_show.raise_()
+        pass
+
+
+    def reset_stack(self):
+        self.stacked_widget.setCurrentIndex(0)
+
+
+    def get_slide_show_images(self) -> list:
+
+        sample = self.image_files.copy()
+
+        random.sample(sample, min(int(self.count), len(self.image_files) -1 ))
+        # print(sample)
+        # print(f"\033[31m{sample}\033[0m")
+        random.shuffle(sample)
+        # print(sample)
+        # print(f"\033[33m{sample}\033[0m")
+        return sample
+
+
+    def dragEnterEvent(self, event: QDragEnterEvent):
+        """Accepts the drag if it contains acceptable file paths (URIs)."""
+        if event.mimeData().hasUrls():
+            can_accept = any(
+                url.isLocalFile() and url.toLocalFile().lower().endswith(('.png', '.jpg', '.jpeg', '.gif'))
+                for url in event.mimeData().urls()
+            )
+            
+            if can_accept:
+                event.acceptProposedAction()
+
+            else:
+                event.ignore()
+            
+            self.overlay.show(can_accept)
+            self.overlay.raise_()
+        else:
+            event.ignore()
+
+
+    def dragLeaveEvent(self, event: QDragLeaveEvent):
+        # Hide the overlay
+        self.overlay.hide()
+        super().dragLeaveEvent(event)
+
+
+    def dropEvent(self, event: QDropEvent):
+        """Handles the actual drop operation by storing paths and triggering redrawing."""
+        
+        # Add to the image list and cache thumbnails
+        for url in event.mimeData().urls():
+            if url.isLocalFile() and url.toLocalFile().lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
+                file_path = url.toLocalFile()
+                if file_path not in self.image_files:
+                    self.image_files.append(file_path)
+
+                    
+        # Reset instruction label style
+        self.overlay.hide()
+
+        self.preview_zone.set_image_files(self.load_image_thumbnails())
+        self.update_image_count()
+
+        event.acceptProposedAction()
+
+
+    def resizeEvent(self, event):
+
+        self.overlay.resizeEvent(event)
+        self.slide_show.resizeEvent(event)
+        return super().resizeEvent(event)
+    
+
+    def load_image_thumbnails(self):
+
+        image_thumbnails = []
+        for file_path in self.image_files:
+            try:
+                img = Image.open(file_path)
+                img.thumbnail((400,400))
+                image_thumbnails.append(img)
+            except Exception as e:
+                print(f"Error loading image {file_path}: {e}")
+            
+
+        # print(image_thumbnails)
+        return image_thumbnails
 
 
     def load_settings(self):
@@ -157,15 +316,19 @@ class MainWindow(QMainWindow):
             self.restoreGeometry(settings.value("geometry"))
             self.count = settings.value("count")
             self.time = settings.value("time")
+            self.image_files = settings.value("images")
+            # print(f"\033[31m{self.image_files}\033[0m")
+            self.image_cache = self.load_image_thumbnails()
+            # print(f"\033[34m{self.image_cache}\033[0m")
+            self.thumbnail_size = settings.value("image_size")
+            
 
         else:
-            return
-            print("very sad")
+            self.count = 10
+            self.time = 30
+            self.image_files = []
+            self.thumbnail_size = 200
 
-
-
-
-            
 
     def closeEvent(self, event):
         """Saves window geometry to QSettings and closes the secondary window."""
@@ -176,15 +339,30 @@ class MainWindow(QMainWindow):
             "count": self.count_input.text(),
             "time": self.time_input.text()
         }
+        if not self.image_files:
+            settings.update({"images": []})
+        else :
+            settings.update({"images": self.image_files})
 
-        # print(settings)
-        settings.update(self.image_drop_widget.save_settings())
+        if not self.preview_zone.thumbnail_size:
+            settings.update({"image_size": 200})
+        else :
+            settings.update({"image_size": self.preview_zone.thumbnail_size})
+
+        
+        # print(settings.get("images"))
         self.settings.settings_save(settings)
-
-
 
         event.accept()
 
+
+    def clear_image_files(self):
+        self.image_files.clear()
+        self.image_cache.clear()
+        self.preview_zone.clear_image_files()
+        self.update_image_count()
+        pass
+        
 
     def create_separator(self):
         """Utility to create a horizontal rule for visual separation."""
@@ -192,3 +370,7 @@ class MainWindow(QMainWindow):
         separator.setFixedHeight(1)
         separator.setStyleSheet("background-color: #ccc;")
         return separator
+    
+
+    def update_image_count(self):
+        self.count_label.setText(f"{str(len(self.image_files))} total images") 
