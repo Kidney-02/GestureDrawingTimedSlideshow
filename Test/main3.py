@@ -25,8 +25,8 @@ class OverlayWidget(QMainWindow):
         
         # QGridLayout allows stacking (layering) widgets in the same cell.
         self.layout = QGridLayout(self.main_container)
-        self.layout.setContentsMargins(0, 0, 0, 0)
-        self.layout.setSpacing(0)
+        self.layout.setContentsMargins(2,2,2,2)
+        # self.layout.setSpacing(0)
         
         # --- 1. Bottom Layer (The Label) ---
         self.background_label = QLabel("Bottom Layer: Main Content Area")

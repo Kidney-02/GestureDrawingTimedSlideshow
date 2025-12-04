@@ -9,33 +9,6 @@ from PIL import ImageQt
 
 
 
-# class OverlayWidget(QWidget):
-#     """The widget that will serve as the translucent overlay."""
-#     def __init__(self, parent=None):
-#         super().__init__(parent)
-        
-#         # 1. Set the background to be translucent green with dashed Border
-#         self.setStyleSheet("background-color: rgba(76, 175, 80, 0.55); border: 2px dashed rgb(76, 175, 80);")
-        
-#         # 2. Add a message label to the center
-#         self.label = QLabel(
-#             "Drop Image Files Here (PNG, JPG, GIF)", 
-#             alignment=Qt.AlignmentFlag.AlignCenter
-#         )
-#         self.label.setStyleSheet("color: white; font-size: 24px;")
-        
-#         layout = QVBoxLayout(self)
-#         layout.addWidget(self.label)
-        
-#         # Start hidden
-#         self.hide() 
-
-#     def update_parent_geometry(self):
-#         """Called by the parent to ensure the overlay covers the entire area."""
-#         if self.parentWidget():
-#             self.setGeometry(self.parentWidget().rect())
-
-
 class ScrollArea(QScrollArea):
     """
     Custom ScrollArea Widget that won't scroll when CTRL is held. Works with parent that will ignore regular scrolling.
@@ -139,20 +112,6 @@ class PreviewZone(QWidget):
 
         self.scroll_area.setWidget(self.image_container_widget)
 
-
-        # Drop Zone Around Scroll Area
-        self.drop_zone = QWidget()
-        self.drop_zone.setObjectName("dropZone") # Need name to set style without breaking scrollarea and others
-        self.drop_zone.setStyleSheet("""
-            #dropZone{
-                border: 2px dashed #aaa;
-                padding: 5px;
-                border-radius: 4px;
-            }
-        """)
-        
-        self.drop_zone_layout = QVBoxLayout(self.drop_zone)
-        self.drop_zone_layout.addWidget(self.scroll_area)
 
 
         self.main_layout.addWidget(self.scroll_area)

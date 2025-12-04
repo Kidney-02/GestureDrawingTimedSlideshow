@@ -3,13 +3,12 @@ import random
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QPushButton, QSizePolicy,
-    QStackedWidget, QApplication
+    QStackedWidget, QApplication, QGraphicsOpacityEffect
     )
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve
 from PySide6.QtGui import (
-    QIntValidator, QDragEnterEvent, QDragLeaveEvent, QDropEvent,
-    QPalette
+    QIntValidator, QDragEnterEvent, QDragLeaveEvent, QDropEvent
     )
 
 from PreviewZone import *
@@ -29,6 +28,8 @@ class OverlayWidget(QWidget):
         self.default_text = "Drop Image Files Here (PNG, JPG, GIF)"
         self.loading_text = "Loading..."
         self.warning_text = "No Images To Show"
+
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
             
 
         # Add a message label to the center
@@ -37,10 +38,36 @@ class OverlayWidget(QWidget):
         self.label.setStyleSheet("color: white; font-size: 24px;")
         
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(2,2,2,2)
         layout.addWidget(self.label)
+
+
+        # --- FADE EFFECT SETUP ---
+        # 1. Create the opacity effect
+        self.opacity_effect = QGraphicsOpacityEffect(self)
+        self.setGraphicsEffect(self.opacity_effect)
+        self.animation = QPropertyAnimation(self.opacity_effect, b"opacity")
+
+        self.animation.setDuration(2000) 
+        self.animation.setEasingCurve(QEasingCurve.Type.InOutQuad)
         
+        self.start_value = self.opacity_effect.opacity()
+        self.animation.setStartValue(self.start_value)
+        self.animation.setEndValue(0.0)
+        self.animation.finished.connect(self.on_animation_end)  
+
         # Start hidden
         self.hide() 
+
+    def on_animation_end(self):
+        self.hide()
+        self.opacity_effect.setOpacity(self.start_value)
+        # self.animation.finished.disconnect()   
+
+
+    def play_opacity_animation(self): 
+        self.animation.stop()
+        self.animation.start()
 
     def update_geometry(self):
         """Called by the parent to ensure the overlay covers the entire area."""
@@ -54,6 +81,8 @@ class OverlayWidget(QWidget):
         2 : "No Images",
         3 : "Loading Images"
         """
+        self.animation.stop()
+        self.on_animation_end()
 
         if state == 0:
             self.setStyleSheet(self.color_accept)
@@ -101,12 +130,29 @@ class MainWindow(QMainWindow):
 
         validator = QIntValidator(1, 100)
 
-                
+
+        ##### --- Stacked Widget ---
+
+        self.stacked_widget = QStackedWidget()
+        # stacked_layout = QVBoxLayout(self.stacked_widget)
+        # self.stacked_widget.layout
+        # setContentsMargins(0, 0, 0, 0)
+        self.setCentralWidget(self.stacked_widget)
+        
+        ##### --- Top Widget ---
+
+        # Used to store main menu and overlay in the same spot
+        top_widget = QWidget()
+        top_layout = QGridLayout(top_widget)
+        top_layout.setContentsMargins(0, 0, 0, 0)
+        top_layout.setSpacing(0)
+
+        ##### --- Main Manu ---
 
         main_widget = QWidget()
-        main_layout = QVBoxLayout(main_widget)  
-
-
+        main_layout = QVBoxLayout(main_widget)        
+        main_layout.setContentsMargins(0, 0, 0, 0) 
+        
 
         ##### --- Section 1: Slideshow Controls ---
 
@@ -145,7 +191,7 @@ class MainWindow(QMainWindow):
             }                                        
         """
         )
-            
+        self.start_button.setCursor(Qt.PointingHandCursor)   
         self.start_button.setMaximumWidth(100)
         self.start_button.clicked.connect(self.start_slide_show)
         control_layout.addWidget(self.start_button)
@@ -161,7 +207,8 @@ class MainWindow(QMainWindow):
              
         self.preview_zone = PreviewZone()        
         self.preview_zone.set_image_files(self.image_cache)
-        self.preview_zone.get_item_width()            
+        self.preview_zone.get_item_width()
+               
 
         main_layout.addWidget(self.preview_zone)
 
@@ -170,6 +217,8 @@ class MainWindow(QMainWindow):
         preview_control_layout = QHBoxLayout(preview_control_group)
         preview_control_layout.setAlignment(Qt.AlignmentFlag.AlignRight)
         preview_control_layout.addStretch(1)
+        preview_control_layout.setSpacing(10)
+        
         
         # Image Count
         self.count_label = QLabel()
@@ -193,28 +242,19 @@ class MainWindow(QMainWindow):
             }                                        
         """
         )
+        self.clear_button.setCursor(Qt.PointingHandCursor) 
         self.clear_button.setMaximumWidth(100)
         self.clear_button.clicked.connect(self.clear_image_files)
         preview_control_layout.addWidget(self.clear_button)
 
 
+
         main_layout.addWidget(preview_control_group)
 
- 
+
         ##### --- Slide Show ---
         self.slide_show = SlideShowWidget(self)
         self.slide_show.hide()
-        
-
-
-        ##### --- Stacked Widget ---
-
-        self.stacked_widget = QStackedWidget()
-
-        self.stacked_widget.addWidget(main_widget)
-        self.stacked_widget.addWidget(self.slide_show)
-
-        self.setCentralWidget(self.stacked_widget)
 
 
 
@@ -222,29 +262,35 @@ class MainWindow(QMainWindow):
         self.overlay = OverlayWidget(self)
         self.overlay.hide() # Set overlay hidden on Start
 
-        
+        # Overlay with grid Layout
+        top_layout.addWidget(main_widget, 0, 0)
+        top_layout.addWidget(self.overlay, 0, 0)
 
+        self.stacked_widget.addWidget(top_widget)
+        self.stacked_widget.addWidget(self.slide_show)
+
+
+    def get_time_and_count(self):
+
+        self.count = self.count_input.text()
+        self.time = self.time_input.text()
+
+
+        return
+        
 
     def start_slide_show(self):
 
         if not self.image_files:
-
             self.overlay.show(2)
-            timer = QTimer(self)
-            timer.setSingleShot(True)
-            timer.start(500) # Time In Miliseconds 
-            timer.timeout.connect(self.overlay.hide)
+            self.overlay.play_opacity_animation()
             
-            
-            #  = QTimer(remainingTime=2)
-            
-            # self.overlay.update_opacity()
-
             return
-
-        self.slide_show.start_slide_show(self.get_slide_show_images(), self.time)
-        
-        self.stacked_widget.setCurrentIndex(1)
+        else:
+            self.get_time_and_count()
+            self.slide_show.start_slide_show(self.get_slide_show_images(), self.time)
+            
+            self.stacked_widget.setCurrentIndex(1)            
 
         pass
 
@@ -324,8 +370,8 @@ class MainWindow(QMainWindow):
 
     def resizeEvent(self, event):
 
-        self.overlay.resizeEvent(event)
-        self.slide_show.resizeEvent(event)
+        # self.overlay.resizeEvent(event)
+        # self.slide_show.resizeEvent(event)
         return super().resizeEvent(event)
     
 
