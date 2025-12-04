@@ -8,12 +8,15 @@ from PySide6.QtWidgets import (
 
 from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve
 from PySide6.QtGui import (
-    QIntValidator, QDragEnterEvent, QDragLeaveEvent, QDropEvent
+    QIntValidator, QDragEnterEvent, QDragLeaveEvent, QDropEvent,
+    QIcon
     )
 
 from PreviewZone import *
 from Settings import *
 from SlideShow import *
+
+ICO_FILE_PATH = "Icon.ico"
 
 
 class OverlayWidget(QWidget):
@@ -110,10 +113,11 @@ class OverlayWidget(QWidget):
 
 
 class MainWindow(QMainWindow):
-    def __init__(self,):
+    def __init__(self, appIcon):
         super().__init__()
         
         self.setWindowTitle("Image Slideshow")
+        self.setWindowIcon(QIcon(ICO_FILE_PATH))
         self.setAcceptDrops(True)
 
         # Slideshow Settings

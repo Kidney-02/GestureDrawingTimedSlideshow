@@ -1,219 +1,102 @@
 import sys
+import re # We'll use the regex module for string replacement
 from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, 
-    QHBoxLayout, QLabel, QPushButton, QSizePolicy, 
-    QGridLayout 
-    # QGraphicsOpacityEffect removed as we are animating position
+    QApplication, QMainWindow, QWidget,
+    QVBoxLayout, QPushButton
 )
-from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve, QPoint # QPoint added for position
+from PySide6.QtGui import QIcon, QPixmap
+from PySide6.QtCore import QByteArray, QSize, Qt
 
-class OverlayWidget(QMainWindow):
+# The base SVG content. The width/height attributes will be dynamically modified.
+SVG_CONTENT_TEMPLATE = """
+<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 24 24">
+    <path fill="#FFFFFF" d="m11.565 13.873l-2.677-2.677q-.055-.055-.093-.129q-.037-.073-.037-.157q0-.168.11-.289q.112-.121.294-.121h5.677q.181 0 .292.124t.111.288q0 .042-.13.284l-2.677 2.677q-.093.093-.2.143t-.235.05t-.235-.05t-.2-.143"/>
+</svg>
+"""
+
+class MainWindow(QMainWindow):
     """
-    A QMainWindow containing a QLabel (bottom layer) and an overlaid QWidget 
-    with three buttons (top layer) centered at the bottom. 
-    The button container now slides in and out.
+    Main window for the PySide application.
     """
-    
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Layered Widget with Slideable Overlay")
-        self.setGeometry(100, 100, 600, 450)
-        
-        # --- Base Container Setup ---
-        self.main_container = QWidget()
-        self.setCentralWidget(self.main_container)
-        
-        # QGridLayout allows stacking (layering) widgets in the same cell.
-        self.layout = QGridLayout(self.main_container)
-        self.layout.setContentsMargins(2,2,2,2)
-        # self.layout.setSpacing(0)
-        
-        # --- 1. Bottom Layer (The Label) ---
-        self.background_label = QLabel("Bottom Layer: Main Content Area")
-        self.background_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.background_label.setStyleSheet("""
-            QLabel {
-                background-color: #ECEFF1; /* Light Gray */
-                font-size: 24px;
-                color: #546E7A;
-                border: 2px dashed #B0BEC5;
-            }
-        """)
-        # The background label goes into cell (0, 0)
-        self.layout.addWidget(self.background_label, 0, 0)
-        
-        # --- 2. Top Layer (The Button Container) ---
-        
-        self.button_overlay_container = QWidget()
-        # Set size policy to fixed to ensure consistent height for animation calculation
-        self.button_overlay_container.setSizePolicy(
-            QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed
-        )
-        self.button_overlay_container.setStyleSheet("""
-            QWidget {
-                /* Semi-transparent black background: 0, 0, 0 (black) with 80 (alpha) */
-                background-color: rgba(0, 0, 0, 80); 
-                border-radius: 12px;
-                padding: 10px;
-            }
-        """)
+        self.setWindowTitle("PySide SVG Icon Demo (Dynamic Size)")
+        self.setGeometry(100, 100, 350, 200)
 
-        # --- SLIDE EFFECT SETUP ---
-        # Create the animation object, targeting the widget's position (b"pos")
-        self.animation = QPropertyAnimation(self.button_overlay_container, b"pos")
-        self.animation.setDuration(300) # 300 milliseconds for a quick slide
-        self.animation.setEasingCurve(QEasingCurve.Type.OutCubic) # Smoother slide
-        
-        # Button Layout within the Overlay Container
-        button_layout = QHBoxLayout(self.button_overlay_container)
-        button_layout.setContentsMargins(10, 10, 10, 10)
-        button_layout.setSpacing(15)
-        
-        # Create and add the three buttons
-        self.btn1 = self._create_styled_button("Action 1", "#FF9800") # Orange
-        self.btn2 = self._create_styled_button("Action 2", "#2196F3") # Blue
-        # This button will now trigger the slide down
-        self.btn3 = self._create_styled_button("Hide Overlay", "#F44336") # Red
-        
-        # --- Connect the hide action ---
-        self.btn3.clicked.connect(self.hide_overlay_box)
-
-        button_layout.addWidget(self.btn1)
-        button_layout.addWidget(self.btn2)
-        button_layout.addWidget(self.btn3)
-        
-        # Final Placement of the Overlay at the bottom center
-        self.layout.addWidget(
-            self.button_overlay_container, 
-            0, 0, 
-            Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignHCenter
-        )
-        
-        # --- 3. Add a Recovery/Show Button (Outside the Overlay) ---
-        
-        # We need a way to bring the overlay back. We'll use a standard
-        # layout within the background label (which acts as a container)
-        self.show_btn = QPushButton("Show Overlay")
-        self.show_btn.setStyleSheet("""
+        # Setting up a simple dark theme for better visibility of the white icon
+        self.setStyleSheet("""
+            QMainWindow { background-color: #f0f0f0; }
             QPushButton {
-                background-color: #795548; /* Brown */
+                background-color: #0078D4; /* Windows Blue */
                 color: white;
-                border-radius: 4px;
-                padding: 5px;
-            }
-        """)
-        self.show_btn.setFixedSize(120, 30)
-        self.show_btn.clicked.connect(self.show_overlay_box)
-        self.show_btn.hide() # Start hidden
-        
-        # Use a QVBoxLayout inside the QLabel to hold the Show button at the top
-        label_layout = QVBoxLayout(self.background_label)
-        label_layout.addWidget(self.show_btn, alignment=Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
-        
-        self.background_label.setLayout(label_layout)
-        
-        # Ensure the background label expands to fill the entire space
-        self.background_label.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
-        )
-        
-        self.main_container.setLayout(self.layout)
-        
-        # NOTE: Position calculations rely on the widget being visible and laid out.
-        # We define a helper to ensure we can access these coordinates.
-        self._y_visible = -1 
-
-    def _create_styled_button(self, text: str, color: str) -> QPushButton:
-        """Helper function to create a consistently styled button."""
-        button = QPushButton(text)
-        button.setFixedSize(110, 40)
-        button.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {color}; 
-                color: white;
-                font-weight: bold;
                 border: none;
-                border-radius: 6px;
-                padding: 8px;
-            }}
-            QPushButton:hover {{
-                background-color: {color.replace('#', '') + 'AA'}; /* Slightly lighter hover */
-            }}
-            QPushButton:pressed {{
-                background-color: {color.replace('#', '') + '88'}; /* Slightly darker pressed */
-            }}
+                padding: 10px 20px;
+                font-size: 16px;
+                border-radius: 8px;
+            }
+            QPushButton:hover { background-color: #005A9E; }
+            QPushButton:pressed { background-color: #004578; }
         """)
-        return button
-    
-    def _calculate_positions(self):
-        """Calculates the visible and hidden Y-coordinates after the widget is laid out."""
-        # Ensure the widget has its correct size/position from the layout
-        QApplication.processEvents() 
-        
-        # The position when it is correctly aligned by the layout (AlignBottom)
-        self._y_visible = self.button_overlay_container.y()
-        # The position fully hidden below the bottom edge of the main container
-        self._y_hidden = self._y_visible + self.button_overlay_container.height() 
-        
-    def hide_overlay_box(self):
-        """Slides out (down) the semi-transparent button container."""
-        if self._y_visible == -1:
-            self._calculate_positions()
 
-        # Stop any active animation
-        self.animation.stop() 
-        
-        # Set start and end points for the slide down
-        x_pos = self.button_overlay_container.x()
-        self.animation.setStartValue(QPoint(x_pos, self._y_visible))
-        self.animation.setEndValue(QPoint(x_pos, self._y_hidden))
+        # --- Setup Central Widget and Layout ---
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        layout = QVBoxLayout(central_widget)
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        # Disconnect any previous connections (e.g., from a show animation)
-        try:
-            self.animation.finished.disconnect()
-        except TypeError:
-            pass
+        # --- 1. Create the QIcon from SVG with a specific rendering size ---
+        # We want the QPixmap to be rendered at 64x64 for maximum sharpness, 
+        # even if the button only shows it at 24x24.
+        svg_render_size = QSize(64, 64) 
+        custom_icon = self.create_icon_from_svg(SVG_CONTENT_TEMPLATE, svg_render_size)
 
-        # Connect a lambda function to hide the widget only after the animation is done
-        self.animation.finished.connect(lambda: (
-            self.button_overlay_container.move(x_pos, self._y_hidden), # Final snap to position
-            self.button_overlay_container.hide(), 
-            self.show_btn.show(),
-            self.animation.finished.disconnect() # Clean up connection
-        ))
+        # --- 2. Create the QPushButton ---
+        self.button = QPushButton("Run Action")
+        self.button.setToolTip(f"Icon rendered at {svg_render_size.width()}x{svg_render_size.height()}px")
         
-        self.animation.start()
-        
-    def show_overlay_box(self):
-        """Slides in (up) the semi-transparent button container."""
-        if self._y_visible == -1:
-            self._calculate_positions()
-        
-        # 1. Make sure the container is visible (it must be visible to animate)
-        # Move it instantly to the hidden start position before showing and animating
-        x_pos = self.button_overlay_container.x()
-        self.button_overlay_container.move(x_pos, self._y_hidden)
-        self.button_overlay_container.show()
-        self.show_btn.hide()
+        # Set the icon and its display size (smaller than the render size for scaling test)
+        self.button.setIcon(custom_icon)
+        self.button.setIconSize(QSize(24, 24))
 
-        # 2. Setup slide in animation (hidden Y -> visible Y)
-        self.animation.stop() # Stop any active animation
+        self.button.clicked.connect(self.on_button_click)
+        layout.addWidget(self.button)
+
+    def set_svg_size(self, svg_template: str, size: QSize) -> str:
+        """
+        Inserts the desired width and height into the SVG template string.
+        """
+        # Using string formatting to inject the size values into the template
+        return svg_template.format(width=size.width(), height=size.height())
+
+
+    def create_icon_from_svg(self, svg_template: str, render_size: QSize) -> QIcon:
+        """
+        Creates a QIcon object after setting the size in the SVG content string.
+        """
+        # 1. Update the SVG string with the desired rendering size
+        sized_svg_data = self.set_svg_size(svg_template, render_size)
+
+        # 2. Convert to QByteArray
+        svg_byte_array = QByteArray(sized_svg_data.encode('utf-8'))
+        pixmap = QPixmap()
         
-        self.animation.setStartValue(QPoint(x_pos, self._y_hidden))
-        self.animation.setEndValue(QPoint(x_pos, self._y_visible))
-        
-        # Disconnect any lingering hide connections
-        try:
-            self.animation.finished.disconnect()
-        except TypeError:
-            pass 
-        
-        # No extra step needed on finish for the show animation
-        self.animation.start()
+        # 3. Load the data (Qt now knows the exact render size from the string attributes)
+        if pixmap.loadFromData(svg_byte_array, "SVG"):
+            # The QIcon is created from the high-resolution QPixmap
+            return QIcon(pixmap)
+        else:
+            print("Error: Could not load SVG data.")
+            return QIcon()
+
+    def on_button_click(self):
+        """
+        A simple function to run when the button is clicked.
+        """
+        print("--- Action Triggered! ---")
 
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    window = OverlayWidget()
+    window = MainWindow()
     window.show()
     sys.exit(app.exec())
