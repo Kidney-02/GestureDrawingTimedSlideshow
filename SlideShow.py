@@ -5,40 +5,42 @@ from PySide6.QtWidgets import(
     )
 from PySide6.QtGui import QPixmap, QPainter, QColor, Qt, QIcon
 from PySide6.QtCore import(
-    Qt, QTimer, QSize, QPropertyAnimation,
-    QEasingCurve, QPoint, QByteArray
+    Qt, QSize, QPropertyAnimation,
+    QEasingCurve, QPoint, QByteArray,
+    QTimer, QTime, QElapsedTimer
     )
 from PIL import Image, ImageQt
 
 
+##### --- Button100
 
 SVG_PLAY = """
-<svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" viewBox="0 0 24 24">
+<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24">
 	<path fill="white" d="M9 15.714V8.287q0-.368.244-.588q.243-.22.568-.22q.102 0 .213.028q.11.027.211.083l5.843 3.733q.186.13.28.298q.093.167.093.379t-.093.379t-.28.298l-5.843 3.733q-.101.055-.213.083t-.213.028q-.326 0-.568-.22T9 15.714" />
 </svg>
 """
 SVG_PAUSE = """
-<svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" viewBox="0 0 24 24">
+<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24">
 	<path fill="white" d="M15 18q-.402 0-.701-.299T14 17V7q0-.402.299-.701T15 6h1.5q.402 0 .701.299T17.5 7v10q0 .402-.299.701T16.5 18zm-7.5 0q-.402 0-.701-.299T6.5 17V7q0-.402.299-.701T7.5 6H9q.402 0 .701.299T10 7v10q0 .402-.299.701T9 18z" />
 </svg>
 """
 SVG_NEXT = """
-<svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" viewBox="0 0 24 24">
+<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24">
 	<path fill="white" d="M4.096 15.106V8.894q0-.373.243-.59q.242-.218.565-.218q.125 0 .237.025t.217.106l4.661 3.112q.187.13.27.295t.084.376t-.083.376t-.27.295l-4.662 3.112q-.106.08-.217.106q-.112.025-.237.025q-.323 0-.565-.218q-.243-.217-.243-.59m8.885 0V8.894q0-.373.242-.59q.243-.218.566-.218q.125 0 .236.025t.217.106l4.662 3.112q.187.13.27.295t.084.376t-.084.376q-.083.164-.27.295l-4.662 3.112q-.105.08-.217.106t-.236.025q-.323 0-.566-.218q-.242-.217-.242-.59" />
 </svg>
 """
 SVG_BACK = """
-<svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" viewBox="0 0 24 24">
+<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24">
 	<path fill="white" d="m18.642 15.783l-4.661-3.112q-.187-.13-.27-.295T13.627 12t.083-.376t.27-.295l4.662-3.112q.106-.08.218-.105q.111-.025.236-.025q.323 0 .566.217t.242.59v6.212q0 .373-.243.59q-.242.218-.565.218q-.125 0-.236-.025q-.112-.025-.218-.106m-8.884 0L5.096 12.67q-.186-.13-.27-.295T4.742 12t.084-.376q.084-.164.27-.295l4.662-3.112q.106-.08.217-.105t.237-.025q.323 0 .565.217t.242.59v6.212q0 .373-.242.59q-.242.218-.565.218q-.125 0-.237-.025t-.217-.106" />
 </svg>
 """
 SVG_STOP = """
-<svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" viewBox="0 0 24 24">
+<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24">
 	<path fill="white" d="M7 15.385v-6.77q0-.666.475-1.14T8.615 7h6.77q.666 0 1.14.475T17 8.615v6.77q0 .666-.475 1.14t-1.14.475h-6.77q-.666 0-1.14-.475T7 15.386" />
 </svg>
 """
 SVG_DOWN = """
-<svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" viewBox="0 0 24 24">
+<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24">
     <path fill="white" d="m11.565 13.873l-2.677-2.677q-.055-.055-.093-.129q-.037-.073-.037-.157q0-.168.11-.289q.112-.121.294-.121h5.677q.181 0 .292.124t.111.288q0 .042-.13.284l-2.677 2.677q-.093.093-.2.143t-.235.05t-.235-.05t-.2-.143"/>
 </svg>
 """
@@ -48,24 +50,38 @@ class SlideShowWidget(QWidget):
     """
     An Overlay that displays the images in a sequence using the predetermined parameters.
     """
-    def __init__(self, parent=None): 
-        super().__init__(parent)
+    def __init__(self, callback=None): 
+        super().__init__()
 
-        self.parent = parent
+        self.parent_call_on_stop = callback
 
         # Parameters
         self.image_files = []
         self.loaded_image = QPixmap()
-        self.time = 0
+        self.time: int = 0
+        self.displayed_image:int = 0
 
-        self.is_playing = True
-        self.is_control_visible = True
+        self.is_playing = False
+        self.is_button_tray_shown = False
 
         self.button_appear_time = 300
 
         self.play_icon = self.create_icon_from_svg(SVG_PLAY)
         self.pause_icon = self.create_icon_from_svg(SVG_PAUSE)
 
+
+        ##### Timer
+
+        self.timer = QTimer()
+        self.elapsed_timer = QElapsedTimer()
+        self.timer.setInterval(1000) 
+        self.timer.timeout.connect(self.update_timer)
+
+        self.paused_offset_ms = 0
+
+
+
+        ##### --- UI ---
         
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
@@ -92,11 +108,11 @@ class SlideShowWidget(QWidget):
 
         # --- 2. Top Layer (The Button Container) ---
 
-        self.button_overlay_container = QWidget()
-        self.button_overlay_container.setSizePolicy(
+        self.button_tray = QWidget()
+        self.button_tray.setSizePolicy(
             QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed
         )
-        self.button_overlay_container.setStyleSheet("""
+        self.button_tray.setStyleSheet("""
             QWidget {
                 background-color: rgba(0, 0, 0, 50);
                 border-radius: 4px;
@@ -104,14 +120,15 @@ class SlideShowWidget(QWidget):
             }
         """)
 
+
         # Create the animation object, targeting the widget's position (b"pos")
-        self.animation = QPropertyAnimation(self.button_overlay_container, b"pos")
+        self.animation = QPropertyAnimation(self.button_tray, b"pos")
         self.animation.setDuration(self.button_appear_time) # 300 milliseconds for a quick slide
         self.animation.setEasingCurve(QEasingCurve.Type.OutCubic) # Smoother slide
 
 
         # Button Layout within the Overlay Container
-        button_layout = QHBoxLayout(self.button_overlay_container)
+        button_layout = QHBoxLayout(self.button_tray)
         button_layout.setContentsMargins(10, 10, 10, 10)
         button_layout.setSpacing(2)
 
@@ -121,9 +138,9 @@ class SlideShowWidget(QWidget):
         self.btn_play.clicked.connect(self.play_pause)
         self.btn_skip = self.create_icon_button(icon = SVG_NEXT)
         self.btn_stop = self.create_icon_button(icon = SVG_STOP)
-        self.btn_stop.clicked.connect(parent.reset_stack)
+        self.btn_stop.clicked.connect(self.stop_slide_show)
         self.btn_hide = self.create_icon_button(icon = SVG_DOWN)
-        self.btn_hide.clicked.connect(self.hide_overlay_box)
+        self.btn_hide.clicked.connect(self.hide_button_action)
 
 
         button_layout.addWidget(self.btn_back)
@@ -133,126 +150,237 @@ class SlideShowWidget(QWidget):
         button_layout.addWidget(self.btn_hide)
 
 
+        # If added to gridlayout button_tray jumps to default position when timer increment updates
+
         layout.addWidget(
-            self.button_overlay_container, 
+            self.button_tray, 
             0, 0, 
             Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignHCenter
         )
 
 
+        # self.timer_container = QWidget()
+        # self.timer_container.setStyleSheet("""
+        #     QWidget {
+        #         background-color: rgba(0, 0, 0, 50);
+        #         border-radius: 4px;
+        #         padding: 10px;
+        #     }
+        # """)
+        # self.timer_layout = QHBoxLayout(self.timer_container)
 
 
-    def mousePressEvent(self, event):
+        self.timer_display = QLabel(self.format_time(self.time))
+        self.timer_display.setStyleSheet("""
+            QLabel {
+                background-color: rgba(0, 0, 0, 50);
+                color: white;
+                font-weight: bold;
+                font-size: 20px;
+                border: none;
+                border-radius: 15px;
+                padding: 5px;
+            }
+        """
+        )
+        self.timer_display.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.timer_display.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        if not self.is_control_visible:
-            self.show_overlay_box()
-        else:
-            self.hide_overlay_box()
+        layout.addWidget(
+            self.timer_display, 
+            0, 0, 
+            Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight
+        )
+                
+
+
+
+    def stop_slide_show(self):
+
+        self.is_playing = False
+        self.is_button_tray_shown = False
+        self.reset_ui()
+        self.stop_timer()
+
+        try:
+            self.parent_call_on_stop()
+        except Exception as e:
+            print(f"Error running parent callback on slide stop: {e}")
+            return
+
+
+    def start_slide_show(self, image_files:list, time:int):
+        """ Start slideshow from parent window """
         
-        # self.is_control_visible = not self.is_control_visible
+        self.image_files = image_files
+        self.time = int(time) * 1000 # Convert seconds to miliseconds
+        print(self.time)
 
-        return super().mousePressEvent(event)
+        self.is_button_tray_shown = False
+
+
+        self.load_image_file(self.image_files[self.displayed_image])
+        self.update_display_image()
+        self.play_pause(True)
+
+        QTimer.singleShot(0, self.reset_ui) # using timer to let the UI refresh before reseting
+        self.timer_display.setText(self.format_time(self.time))
+
+        
+        # Wait 2 seconds and start timer
+        QTimer.singleShot(500, self.start_timer)
+
+        pass
+
+
+    def start_timer(self):
+        if self.paused_offset_ms == 0:
+            self.elapsed_timer.start()
+        else:
+            self.elapsed_timer.restart()
+
+        self.timer.start()
+
+
+    def stop_timer(self):
+        self.timer.stop()
+        # self.elapsed_timer.stop()
+        self.paused_offset_ms = 0
+            
+    
+    def pause_timer(self):
+         if self.timer.isActive():
+            self.timer.stop()
+            
+            self.paused_offset_ms += self.elapsed_timer.elapsed()
+
+
+    def update_timer(self):
+        """Called every 100ms to update the display and check the limit."""
+        
+        elapsed_ms = self.elapsed_timer.elapsed()
+        # elapsed_s = elapsed_ms / 1000.0
+
+        self.timer_display.setText(self.format_time(self.time + 100 - elapsed_ms))
+    
+        
+        # Check if the elapsed time has reached or exceeded 3.0 seconds (3000 ms)
+        if elapsed_ms >= int(self.time):
+            self.timer.stop()
+
+
+    def format_time(self, total_ms: int) -> str:
+        """Converts total milliseconds into MM:SS format."""
+
+        if total_ms < 0:
+            total_ms = 0
+            
+        total_seconds = total_ms // 1000  
+        
+        # 3. Calculate minutes (MM)
+        minutes = total_seconds // 60
+        
+        # 4. Calculate remaining seconds (SS)
+        seconds = total_seconds % 60
+        
+
+        return f"{minutes:02}:{seconds:02}"
+
+
+    def reset_ui(self):
+        """ Sets UI to it's current configuration. """
+        
+        self.set_play_button_icon()
+        self.show_hide_button_tray(0)
+
+        pass
     
 
+    def hide_button_action(self):
+        """ Hide Control Tray on button click """
+        self.is_button_tray_shown = False
+        self.show_hide_button_tray(self.button_appear_time)
+
+
     def change_visibility(self):
-        self.is_control_visible = not self.is_control_visible
+        self.is_button_tray_shown = not self.is_button_tray_shown
 
+
+    def show_hide_button_tray(self, time:int = 0):
+        """ Show or hide the Button overlay based on the control visibility parameter """
         
-    def hide_overlay_box(self):
-        """Slides out (down) the semi-transparent button container."""
+        print("AAA")
 
-        # Stop any active animation
-        self.animation.stop()
-
-        # Disconnect any previous connections (e.g., from a show animation)
-        try:
-            self.animation.finished.disconnect()
-        except TypeError:
-            pass
-        
-        # Set start and end points for the slide down
-        x_pos = self.button_overlay_container.x()
-        y_start = self.button_overlay_container.y()
-
-        y_end = self.calculate_widget_bottom() + self.button_overlay_container.height()
-        self.animation.setStartValue(QPoint(x_pos, y_start))
-        self.animation.setEndValue(QPoint(x_pos, y_end))
-
-        # print(y_end)
-        
-
-        # Connect a lambda function to hide the widget only after the animation is done
-        self.animation.finished.connect(lambda: (
-            self.button_overlay_container.move(x_pos, y_end), # Final snap to position
-            self.button_overlay_container.hide(),
-            self.animation.finished.disconnect(), # Clean up connection
-        ))
-        
-        self.animation.start()        
-        self.change_visibility()
-        
-
-    def show_overlay_box(self):
-        """Slides in (up) the semi-transparent button container."""
-        
         self.animation.stop()
 
         # Disconnect any lingering hide connections
         try:
             self.animation.finished.disconnect()
         except TypeError:
-            pass 
+            pass
+        
+        self.animation.setDuration(time)
 
         # Set start and end points for the slide up
-        x_pos = self.button_overlay_container.x()
-        y_start = self.calculate_widget_bottom()
+        x_pos = int((self.width() - self.button_tray.width()) * 0.5)
         
-        y_end = y_start - self.button_overlay_container.height()
+        if not self.is_button_tray_shown:
+            # if False Hide Tray
+            y_end = self.height()
+            y_start = y_end - self.button_tray.height()
+            
+        else:
+            # If True Show Tray
+            y_start = self.height()
+            y_end = y_start - self.button_tray.height()
+         
         
-        # print(y_end)
+        # print(y_start,y_end) 
 
         self.animation.setStartValue(QPoint(x_pos, y_start))
         self.animation.setEndValue(QPoint(x_pos, y_end))
 
         self.animation.finished.connect(lambda: (
-            self.button_overlay_container.move(x_pos, y_end),
+            self.button_tray.move(x_pos, y_end),
             self.animation.finished.disconnect(),
         ))
 
         
-        self.button_overlay_container.show()
+        # self.button_tray.show()
         self.animation.start()
-        self.change_visibility()
-
+        
 
     def calculate_widget_bottom(self) -> int:
+        """ Calculates the bottom of the widget"""
         
-        y = self.y() + self.height()
+        y = self.height()
         return y
 
 
-    def play_pause(self, force_play:bool = None):
+    def play_pause(self, force_play:bool = False):
         """Play and Pause the timer and change button Icon"""
 
-        print(force_play)
+        # print(force_play)
 
         if force_play is False:
-            if self.is_playing:
-                # Pause if Playing
-                # Display Play icon if paused because you unpause when clicking
-                icon = self.play_icon
-            else:
-                # Play if Paused
-                icon = self.pause_icon
-            
-
             
             self.is_playing = not self.is_playing
+            self.pause_timer()
+
         elif force_play:
-            icon = self.pause_icon
             self.is_playing = True
 
+        self.set_play_button_icon()
 
+        return
+    
+
+    def set_play_button_icon(self):
+        """ Set's play button icon based on if the timer is playing or paused"""
+        if self.is_playing:
+            icon = self.pause_icon
+        else:
+            icon = self.play_icon
         self.btn_play.setIcon(icon)
 
         return
@@ -268,7 +396,11 @@ class SlideShowWidget(QWidget):
         """
         button = QPushButton(parent)
 
-        button.setStyleSheet("""           
+        button.setStyleSheet("""
+            QPushButton:focus {
+                outline: 0; 
+                border: none
+            }
             QPushButton {
                 background-color: rgba(0, 0, 0, 30); 
             }
@@ -279,7 +411,7 @@ class SlideShowWidget(QWidget):
                 background-color: rgba(0, 0, 0, 40);
             }                                        
         """
-        )
+        )   
         
         # 1. create and icon
         icon = self.create_icon_from_svg(icon)
@@ -295,6 +427,7 @@ class SlideShowWidget(QWidget):
         
         
         return button
+
 
     def create_icon_from_svg(self, svg_data:str, size: QSize = QSize(80, 80)) -> QIcon:
         """
@@ -318,37 +451,6 @@ class SlideShowWidget(QWidget):
             return QIcon() # Returns an empty icon
 
 
-    def update_geometry(self):
-        """Called by the parent to ensure the overlay covers the entire area."""
-        if self.parentWidget():
-            pass
-        self.setGeometry(self.parentWidget().rect())
-
-
-    def show(self):
-        
-        self.update_geometry()
-        super().show()
-    
-
-
-    def start_slide_show(self, image_files:list, time:int):
-        """ Start slideshow from parent window """
-        
-        self.image_files = image_files
-        self.time = time
-
-
-        self.load_image_file(self.image_files[0])
-        self.update_display_image()
-        self.play_pause(True)
-
-        # Wait 2 seconds and start timer
-
-
-        pass
-
-
     def load_image_file(self, file_path:str) -> Image:        
 
         try:
@@ -364,13 +466,6 @@ class SlideShowWidget(QWidget):
         return image
 
 
-    def resizeEvent(self, event):
-
-        self.update_display_image()
-
-        return super().resizeEvent(event)
-    
-    
     def update_display_image(self):
 
         if self.loaded_image.isNull():
@@ -393,7 +488,25 @@ class SlideShowWidget(QWidget):
         return image_scaled
 
 
+    ##### --- Overwriting Functions---
 
+    def resizeEvent(self, event):
+
+        self.update_display_image()
+        # print("a")
+
+        return super().resizeEvent(event)
+        
+
+    def mousePressEvent(self, event):
+        
+        # Invert visibility and show or hide the button tray
+        self.change_visibility()
+        self.show_hide_button_tray(self.button_appear_time)        
+
+        return super().mousePressEvent(event)
+    
+    
 
     # def _update_status_label(self, current_image_num, total_images):
     #     self.status_label.setText(

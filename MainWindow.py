@@ -25,15 +25,16 @@ class OverlayWidget(QWidget):
         super().__init__(parent)
         
         # Color presets
-        self.color_accept = "background-color: rgba(76, 175, 80, 0.55); border: 2px dashed rgb(76, 175, 80);"
-        self.color_reject = "background-color: rgba(220, 82, 80, 0.55); border: 2px dashed rgb(220, 82, 80);"
+        self.color_accept = "background-color: rgba(76, 175, 80, 0.55); border: 2px dashed rgb(76, 175, 80); border-radius: 4px;"
+        self.color_reject = "background-color: rgba(220, 82, 80, 0.55); border: 2px dashed rgb(220, 82, 80); border-radius: 4px;"
 
         self.default_text = "Drop Image Files Here (PNG, JPG, GIF)"
         self.loading_text = "Loading..."
         self.warning_text = "No Images To Show"
 
-        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-            
+
+
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)    
 
         # Add a message label to the center
         self.label = QLabel(self.default_text)
@@ -72,10 +73,12 @@ class OverlayWidget(QWidget):
         self.animation.stop()
         self.animation.start()
 
-    def update_geometry(self):
-        """Called by the parent to ensure the overlay covers the entire area."""
-        if self.parentWidget():
-            self.setGeometry(self.parentWidget().rect())
+
+    # def update_geometry(self):
+    #     """Called by the parent to ensure the overlay covers the entire area."""
+    #     if self.parentWidget():
+    #         self.setGeometry(self.parentWidget().rect())
+
 
     def show(self, state:int = 1):
         """
@@ -100,7 +103,7 @@ class OverlayWidget(QWidget):
             self.setStyleSheet(self.color_accept)
             self.label.setText(self.loading_text)
 
-        self.update_geometry()
+        # self.update_geometry()
         super().show()
 
     def update_opacity(self):
@@ -108,12 +111,12 @@ class OverlayWidget(QWidget):
         return
 
     def resizeEvent(self, event):
-        self.update_geometry()
+        # self.update_geometry()
         return super().resizeEvent(event)
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, appIcon):
+    def __init__(self):
         super().__init__()
         
         self.setWindowTitle("Image Slideshow")
@@ -180,9 +183,14 @@ class MainWindow(QMainWindow):
 
         # Start Button
         self.start_button = QPushButton("Start Session")
+        self.start_button.setFixedWidth(100)
         self.start_button.setStyleSheet("""
-            QWidget {
-                color: white; font-weight: bold;
+            QPushButton {
+                color: white;
+                font-weight: bold;
+                border: none;
+                border-radius: 4px;
+                padding: 3px;
             }
             QPushButton {
                 background-color: #4CAF50; 
@@ -196,7 +204,6 @@ class MainWindow(QMainWindow):
         """
         )
         self.start_button.setCursor(Qt.PointingHandCursor)   
-        self.start_button.setMaximumWidth(100)
         self.start_button.clicked.connect(self.start_slide_show)
         control_layout.addWidget(self.start_button)
         
@@ -231,9 +238,14 @@ class MainWindow(QMainWindow):
 
         # Clear Button
         self.clear_button = QPushButton("Clear Images")
+        self.clear_button.setFixedWidth(100)
         self.clear_button.setStyleSheet("""
-            QWidget {
-                color: white; font-weight: bold;
+            QPushButton {
+                color: white;
+                font-weight: bold;
+                border: none;
+                border-radius: 4px;
+                padding: 3px;
             }
             QPushButton {
                 background-color: #555; 
@@ -252,14 +264,12 @@ class MainWindow(QMainWindow):
         preview_control_layout.addWidget(self.clear_button)
 
 
-
         main_layout.addWidget(preview_control_group)
 
 
         ##### --- Slide Show ---
-        self.slide_show = SlideShowWidget(self)
+        self.slide_show = SlideShowWidget(callback=self.reset_stack)
         self.slide_show.hide()
-
 
 
         ##### --- The Overlay ---
@@ -292,15 +302,20 @@ class MainWindow(QMainWindow):
             return
         else:
             self.get_time_and_count()
+
+            self.stacked_widget.setCurrentIndex(1)
+            self.slide_show.show()
             self.slide_show.start_slide_show(self.get_slide_show_images(), self.time)
             
-            self.stacked_widget.setCurrentIndex(1)            
+
+            # QApplication.processEvents()
 
         pass
 
 
     def reset_stack(self):
         self.stacked_widget.setCurrentIndex(0)
+        self.slide_show.hide()
 
 
     def get_slide_show_images(self) -> list:

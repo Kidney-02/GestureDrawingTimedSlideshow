@@ -93,7 +93,8 @@ class PreviewZone(QWidget):
         self.scroll_area.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.scroll_area.setStyleSheet("""
             QScrollArea {
-                border: 1px solid #aaa; 
+                border: 1px solid #aaa;
+                border-radius: 4px;
                 padding: 2px;                
             }
         """)
