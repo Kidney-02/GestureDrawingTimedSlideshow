@@ -5,7 +5,7 @@ class Settings():
     def __init__(self,):
         super().__init__()
 
-        self.settings = QSettings("orgName", "appName")
+        self.settings = QSettings("KidneyCorps", "Drawing Practicer")
 
 
     def settings_load(self):

@@ -125,7 +125,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         
-        self.setWindowTitle("Image Slideshow")
+        self.setWindowTitle("Drawing Practicer")
         self.setWindowIcon(QIcon(ICO_FILE_PATH))
         self.setAcceptDrops(True)
 
@@ -197,6 +197,9 @@ class MainWindow(QMainWindow):
         # Start Button
         self.start_button = QPushButton("Start Session")
         self.start_button.setFixedWidth(100)
+        self.start_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.start_button.setCursor(Qt.PointingHandCursor)   
+        self.start_button.clicked.connect(self.start_slide_show)
         self.start_button.setStyleSheet("""
             QPushButton {
                 color: white;
@@ -216,8 +219,6 @@ class MainWindow(QMainWindow):
             }                                        
         """
         )
-        self.start_button.setCursor(Qt.PointingHandCursor)   
-        self.start_button.clicked.connect(self.start_slide_show)
         control_layout.addWidget(self.start_button)
         
         control_layout.addStretch(1)
@@ -253,6 +254,10 @@ class MainWindow(QMainWindow):
         # Clear Button
         self.clear_button = QPushButton("Clear Images")
         self.clear_button.setFixedWidth(100)
+        self.clear_button.setCursor(Qt.PointingHandCursor)
+        self.start_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.clear_button.setMaximumWidth(100)
+        self.clear_button.clicked.connect(self.clear_image_files)
         self.clear_button.setStyleSheet("""
             QPushButton {
                 color: white;
@@ -272,9 +277,6 @@ class MainWindow(QMainWindow):
             }                                        
         """
         )
-        self.clear_button.setCursor(Qt.PointingHandCursor) 
-        self.clear_button.setMaximumWidth(100)
-        self.clear_button.clicked.connect(self.clear_image_files)
         preview_control_layout.addWidget(self.clear_button)
 
 
@@ -325,7 +327,9 @@ class MainWindow(QMainWindow):
             self.slide_show.show()
             if self.full_screen:
                 self.showFullScreen()
+            self.slide_show.set_full_screen_icon(not self.full_screen)
             self.slide_show.start_slide_show(self.get_slide_show_images(), self.time)
+
             
 
             # QApplication.processEvents()
@@ -534,6 +538,7 @@ class MainWindow(QMainWindow):
         # self.slide_show.resizeEvent(event)
         return super().resizeEvent(event)
     
+
     def keyPressEvent(self, event):
 
         if event.key() == Qt.Key.Key_Escape:

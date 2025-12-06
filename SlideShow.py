@@ -391,7 +391,7 @@ class SlideShowWidget(QWidget):
         return y
 
 
-    def play_pause_action(self, force_play:bool = False):
+    def play_pause_action(self):
         """Play and Pause the timer on button press"""
 
         if not self.is_playing:
@@ -431,6 +431,7 @@ class SlideShowWidget(QWidget):
 
         self.restart_timer()
     
+
 
     def full_screen_button_action(self):
         
@@ -475,7 +476,7 @@ class SlideShowWidget(QWidget):
         :return: A configured QPushButton instance.
         """
         button = QPushButton(parent)
-
+        button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         button.setStyleSheet("""
             QPushButton:focus {
                 outline: 0; 
@@ -595,8 +596,18 @@ class SlideShowWidget(QWidget):
 
         return super().mousePressEvent(event)
     
+    def keyPressEvent(self, event):
 
+        if event.key() == Qt.Key.Key_Space:
+            self.play_pause_action()
+        elif event.key() == Qt.Key.Key_Left:
+            self.skip_bakward_action()
+        elif event.key() == Qt.Key.Key_Right:
+            self.skip_forward_action()
+        else:
+            super().keyPressEvent(event)
 
+    
 
 
 
