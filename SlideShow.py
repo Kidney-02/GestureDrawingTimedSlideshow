@@ -44,41 +44,56 @@ SVG_DOWN = """
     <path fill="white" d="m11.565 13.873l-2.677-2.677q-.055-.055-.093-.129q-.037-.073-.037-.157q0-.168.11-.289q.112-.121.294-.121h5.677q.181 0 .292.124t.111.288q0 .042-.13.284l-2.677 2.677q-.093.093-.2.143t-.235.05t-.235-.05t-.2-.143"/>
 </svg>
 """
+SVG_FULL = """
+<svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" viewBox="0 0 24 24">
+	<path fill="#fff" d="M6 14c-.55 0-1 .45-1 1v3c0 .55.45 1 1 1h3c.55 0 1-.45 1-1s-.45-1-1-1H7v-2c0-.55-.45-1-1-1m0-4c.55 0 1-.45 1-1V7h2c.55 0 1-.45 1-1s-.45-1-1-1H6c-.55 0-1 .45-1 1v3c0 .55.45 1 1 1m11 7h-2c-.55 0-1 .45-1 1s.45 1 1 1h3c.55 0 1-.45 1-1v-3c0-.55-.45-1-1-1s-1 .45-1 1zM14 6c0 .55.45 1 1 1h2v2c0 .55.45 1 1 1s1-.45 1-1V6c0-.55-.45-1-1-1h-3c-.55 0-1 .45-1 1" />
+</svg>
+"""
+SVG_EXIT = """
+<svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" viewBox="0 0 24 24">
+	<path fill="#fff" d="M6 16h2v2c0 .55.45 1 1 1s1-.45 1-1v-3c0-.55-.45-1-1-1H6c-.55 0-1 .45-1 1s.45 1 1 1m2-8H6c-.55 0-1 .45-1 1s.45 1 1 1h3c.55 0 1-.45 1-1V6c0-.55-.45-1-1-1s-1 .45-1 1zm7 11c.55 0 1-.45 1-1v-2h2c.55 0 1-.45 1-1s-.45-1-1-1h-3c-.55 0-1 .45-1 1v3c0 .55.45 1 1 1m1-11V6c0-.55-.45-1-1-1s-1 .45-1 1v3c0 .55.45 1 1 1h3c.55 0 1-.45 1-1s-.45-1-1-1z" />
+</svg>
+"""
 
 
 class SlideShowWidget(QWidget):
-    """
-    An Overlay that displays the images in a sequence using the predetermined parameters.
-    """
-    def __init__(self, callback=None): 
+    def __init__(self, end_callback = None, full_screen_toggle_callback = None):
+        """
+        :param end_callback: function to call when the slideshow ends.
+        """
         super().__init__()
 
-        self.parent_call_on_stop = callback
+        self.parent_call_on_stop = end_callback
+        self.parent_full_screen_toggle = full_screen_toggle_callback
+        
+
+        # Icons
+        self.play_icon = self.create_icon_from_svg(SVG_PLAY)
+        self.pause_icon = self.create_icon_from_svg(SVG_PAUSE)
+        self.full_icon = self.create_icon_from_svg(SVG_FULL)
+        self.exit_icon = self.create_icon_from_svg(SVG_EXIT)
 
         # Parameters
-        self.image_files = []
-        self.loaded_image = QPixmap()
+        self.image_files: list = []
+        self.loaded_image: QPixmap = QPixmap()
         self.time: int = 0
-        self.displayed_image:int = 0
+        self.current_image:int = 0
+        self.total_images: int = 0
 
         self.is_playing = False
         self.is_button_tray_shown = False
 
         self.button_appear_time = 300
 
-        self.play_icon = self.create_icon_from_svg(SVG_PLAY)
-        self.pause_icon = self.create_icon_from_svg(SVG_PAUSE)
-
 
         ##### Timer
 
         self.timer = QTimer()
-        self.elapsed_timer = QElapsedTimer()
-        self.timer.setInterval(1000) 
+        self.timer.setInterval(200) 
         self.timer.timeout.connect(self.update_timer)
-
+        
+        self.elapsed_timer = QElapsedTimer()
         self.paused_offset_ms = 0
-
 
 
         ##### --- UI ---
@@ -124,10 +139,7 @@ class SlideShowWidget(QWidget):
         overlay_layout.setContentsMargins(5,5,5,5)
         overlay_layout.setColumnStretch(0,1)
 
-        layout.addWidget(overlay, 0, 0)
-
-
-        
+        layout.addWidget(overlay, 0, 0)        
 
 
         self.button_tray = QWidget(self)
@@ -155,21 +167,25 @@ class SlideShowWidget(QWidget):
         button_layout.setSpacing(2)
 
 
-        self.btn_back = self.create_icon_button(icon = SVG_BACK)
-        self.btn_play = self.create_icon_button(icon = SVG_PAUSE)
-        self.btn_play.clicked.connect(self.play_pause)
-        self.btn_skip = self.create_icon_button(icon = SVG_NEXT)
-        self.btn_stop = self.create_icon_button(icon = SVG_STOP)
+        self.btn_back = self.create_icon_button(icon_name = SVG_BACK)
+        self.btn_back.clicked.connect(self.skip_bakward_action)
+        self.btn_play = self.create_icon_button(icon = self.pause_icon)
+        self.btn_play.clicked.connect(self.play_pause_action)
+        self.btn_skip = self.create_icon_button(icon_name = SVG_NEXT)
+        self.btn_skip.clicked.connect(self.skip_forward_action)
+        self.btn_stop = self.create_icon_button(icon_name = SVG_STOP)
         self.btn_stop.clicked.connect(self.stop_slide_show)
-        self.btn_hide = self.create_icon_button(icon = SVG_DOWN)
+        self.btn_hide = self.create_icon_button(icon_name = SVG_DOWN)
         self.btn_hide.clicked.connect(self.hide_button_action)
-
+        self.btn_full = self.create_icon_button(icon = self.exit_icon)
+        self.btn_full.clicked.connect(self.full_screen_button_action)
 
         button_layout.addWidget(self.btn_back)
         button_layout.addWidget(self.btn_play)
         button_layout.addWidget(self.btn_skip)
         button_layout.addWidget(self.btn_stop)
         button_layout.addWidget(self.btn_hide)
+        button_layout.addWidget(self.btn_full)
 
 
         overlay_layout.addWidget(
@@ -200,16 +216,11 @@ class SlideShowWidget(QWidget):
             0, 0, 
             Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight
         )
-        
-
-        # self.button_tray.raise_()
-        # self.button_tray.show()
 
 
 
     def stop_slide_show(self):
 
-        self.is_playing = False
         self.is_button_tray_shown = False
         self.reset_ui()
         self.stop_timer()
@@ -225,85 +236,106 @@ class SlideShowWidget(QWidget):
         """ Start slideshow from parent window """
         
         self.image_files = image_files
-        self.time = int(time) * 1000 # Convert seconds to miliseconds
-        # print(self.time)
-
-        # self.is_button_tray_shown = False
-
-
-        self.load_image_file(self.image_files[self.displayed_image])
-        self.update_display_image()
-        self.play_pause(True)
+        self.time = int(time) * 1000 + 900 # Convert seconds to miliseconds add a second because it feels better
+        self.total_images = len(self.image_files)
+        self.current_image = 0
+        self.display_new_image()
 
         QTimer.singleShot(0, self.reset_ui) # using timer to let the UI refresh before reseting
         self.timer_display.setText(self.format_time(self.time))
-
         
         # Wait 2 seconds and start timer
-        QTimer.singleShot(500, self.start_timer)
+        QTimer.singleShot(2000, self.start_timer)
 
         pass
 
 
     def start_timer(self):
-        """ Starts timer from beginning """
+        """ Starts or resume timer """
+        if self.is_playing:
+            return
+
         if self.paused_offset_ms == 0:
             self.elapsed_timer.start()
         else:
             self.elapsed_timer.restart()
 
         self.timer.start()
+        self.is_playing = True
+        self.set_play_button_icon()
 
 
     def stop_timer(self):
         """ Stops and resets timer """
+        if not self.is_playing:
+            return
         self.timer.stop()
-        # self.elapsed_timer.stop()
-        self.paused_offset_ms = 0
+        self.paused_offset_ms = 0        
+        self.elapsed_timer.invalidate()
+        self.is_playing = False
+        self.set_play_button_icon()
             
     
     def pause_timer(self):
-         """ Pause Timer so it can be restarted"""
-         if self.timer.isActive():
-            self.timer.stop()
-            
-            self.paused_offset_ms += self.elapsed_timer.elapsed()
+        """ Pause Timer so it can be resumed"""
+
+        if not self.is_playing:
+            return
 
 
-    def resume_timer():
-        """ Resmes the timer from previous time """
+        self.timer.stop()
+
+        self.paused_offset_ms += self.elapsed_timer.elapsed()
+        self.is_playing = False
+        self.set_play_button_icon()
+        
+    def restart_timer(self):
+        """Resets timer keeps playig status"""
+
+        
+        self.timer.stop()
+        self.paused_offset_ms = 0
+        self.elapsed_timer.invalidate()
+        self.elapsed_timer.restart()
+
+        self.update_timer()
+
+
+        if self.is_playing:
+            # Wait 0.5 seconds and start timer
+            # QTimer.singleShot(500, self.start_timer)
+            self.timer.start()  
 
         pass
-
+            
 
     def update_timer(self):
         """Called every 100ms to update the display and check the limit."""
         
-        elapsed_ms = self.elapsed_timer.elapsed()
-        # elapsed_s = elapsed_ms / 1000.0
-
-        self.timer_display.setText(self.format_time(self.time + 100 - elapsed_ms))
-    
+        time_since_last_start = self.elapsed_timer.elapsed()
         
+        elapsed_ms = self.paused_offset_ms + time_since_last_start
+
         # Check if the elapsed time has reached or exceeded 3.0 seconds (3000 ms)
         if elapsed_ms >= int(self.time):
-            self.timer.stop()
+
+            # self.timer.stop()
+            self.skip_forward_action()
+
+            pass
+
+        self.timer_display.setText(self.format_time(self.time - elapsed_ms))
+        # print(f"{time_since_last_start:04}, {elapsed_ms:04}")
 
 
     def format_time(self, total_ms: int) -> str:
         """Converts total milliseconds into MM:SS format."""
 
-        if total_ms < 0:
-            total_ms = 0
+        total_ms = max(total_ms, 0)
             
         total_seconds = total_ms // 1000  
-        
-        # 3. Calculate minutes (MM)
         minutes = total_seconds // 60
-        
-        # 4. Calculate remaining seconds (SS)
-        seconds = total_seconds % 60
-        
+        seconds = total_seconds % 60        
 
         return f"{minutes:02}:{seconds:02}"
 
@@ -359,27 +391,70 @@ class SlideShowWidget(QWidget):
         return y
 
 
-    def play_pause(self, force_play:bool = False):
-        """Play and Pause the timer and change button Icon"""
+    def play_pause_action(self, force_play:bool = False):
+        """Play and Pause the timer on button press"""
 
-        # print(force_play)
-
-        if force_play is False:
-            
-            self.is_playing = not self.is_playing
-            if self.is_playing:
-                self.start_timer()
-            else:
-                self.pause_timer()
-
-        elif force_play:
-            self.is_playing = True
+        if not self.is_playing:
             self.start_timer()
-
-        self.set_play_button_icon()
+        else:
+            self.pause_timer()
+        
+        # print(self.is_playing)
 
         return
     
+
+    def skip_forward_action(self):
+        """ Skip Forward on button press"""
+
+        self.current_image += 1        
+        # print(self.current_image)
+        if self.current_image >= self.total_images:
+            self.stop_slide_show()
+            return
+        
+        self.display_new_image()
+        self.restart_timer()
+
+    
+    def skip_bakward_action(self):
+        """ Skip backward on button press"""
+
+        self.current_image -= 1
+        # print(self.current_image)
+        if self.current_image < 0:
+            self.restart_timer()
+            self.current_image = 0
+            return
+
+        self.display_new_image()
+
+        self.restart_timer()
+    
+
+    def full_screen_button_action(self):
+        
+        try:
+            self.parent_full_screen_toggle()
+        except Exception as e:
+            print(f"Exit FullScreen callback error: {e}")
+
+        pass
+
+    
+    def set_full_screen_icon(self, full_screen_mode:bool):
+        """
+        Set FullScreen icon
+        :param full_screen_mode: True = FullScreen, False = Normal
+        """
+        
+        if full_screen_mode:
+            icon = self.full_icon
+        else:
+            icon = self.exit_icon
+        self.btn_full.setIcon(icon)
+        return
+
 
     def set_play_button_icon(self):
         """ Set's play button icon based on if the timer is playing or paused"""
@@ -388,11 +463,10 @@ class SlideShowWidget(QWidget):
         else:
             icon = self.play_icon
         self.btn_play.setIcon(icon)
-
         return
 
 
-    def create_icon_button(self, icon:str = None, tooltip:str = "", parent = None, size:QSize = QSize(50,50)) -> QPushButton:
+    def create_icon_button(self, icon_name:str = None, icon: QIcon = None, tooltip:str = "", parent = None, size:QSize = QSize(50,50)) -> QPushButton:
         """
         Creates a standard QPushButton with a system stock icon.
         
@@ -420,7 +494,12 @@ class SlideShowWidget(QWidget):
         )   
         
         # 1. create and icon
-        icon = self.create_icon_from_svg(icon)
+        if icon is None:
+            try:
+                icon = self.create_icon_from_svg(icon_name)
+            except:
+                icon = QStyle.StandardPixmap.SP_ComputerIcon
+                pass
 
         # 2. Set the icon and icon size
         button.setIcon(icon)
@@ -456,6 +535,10 @@ class SlideShowWidget(QWidget):
             print("Error: Could not load SVG data.")
             return QIcon() # Returns an empty icon
 
+
+    def display_new_image(self):
+        self.load_image_file(self.image_files[self.current_image])
+        self.update_display_image()
 
     def load_image_file(self, file_path:str) -> Image:        
 
@@ -514,30 +597,6 @@ class SlideShowWidget(QWidget):
     
 
 
-    
-
-    # def _update_status_label(self, current_image_num, total_images):
-    #     self.status_label.setText(
-    #         f"Image {current_image_num} of {total_images}\n"
-    #         f"Time Left: {self.current_countdown_time}s"
-    #     )
-    #     self.status_label.raise_() # Ensures it's always visible over the image
-
-
-    # def _update_countdown(self):
-    #     self.current_countdown_time -= 1
-    #     # ... (handling for current_countdown_time < 0 and stopping timer)
-
-    #     # Update only the time part of the label
-    #     current_text = self.status_label.text()
-    #     lines = current_text.split('\n')
-    #     if len(lines) > 0:
-    #         image_info = lines[0] # "Image X of Y"
-    #         self.status_label.setText(
-    #             f"{image_info}\n"
-    #             f"Time Left: {self.current_countdown_time}s"
-    #         )
-    #     self.status_label.raise_()
 
 
 

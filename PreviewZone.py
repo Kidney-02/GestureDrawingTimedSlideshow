@@ -62,8 +62,7 @@ class PreviewZone(QWidget):
     A custom Widget designed to accept dragged files and display them 
     in a scrollable grid area, simulating a file system view.
     """
-
-    def __init__(self):
+    def __init__(self, thumbnail_size:int = 200):
         super().__init__()
 
         self.image_thumbnails = []
@@ -72,7 +71,8 @@ class PreviewZone(QWidget):
         self.min_size = 50
         self.max_size = 400
         self.size_step = 20
-        self.thumbnail_size = 200 # Initial size
+        self.thumbnail_size = thumbnail_size # Initial size
+        
 
         # Store the currently used number of columns
         self.current_columns = 0
@@ -117,8 +117,7 @@ class PreviewZone(QWidget):
 
         self.main_layout.addWidget(self.scroll_area)
         
-
-        
+       
     def recalculate_and_redraw(self, force_redraw:bool = False):
         """
         Calculates the new maximum number of columns and rebuilds the grid.
@@ -154,6 +153,7 @@ class PreviewZone(QWidget):
             if item.widget():
                 item.widget().deleteLater()
         
+
     def display_image(self, img, row, col):
         """ resizes, and displays an image from the given path in a specific grid cell."""
         
@@ -182,8 +182,10 @@ class PreviewZone(QWidget):
     def get_available_width(self) -> int: 
         return self.scroll_area.viewport().width() - 20
     
+
     def get_item_width(self) -> int:
         return int(self.thumbnail_size + 20)
+
 
     def wheelEvent(self, event: QWheelEvent):
         """Resizes the thumbnails based on the scroll wheel movement, only if Ctrl is pressed."""
@@ -254,6 +256,12 @@ class PreviewZone(QWidget):
         self.image_thumbnails.clear()
         self.recalculate_and_redraw(True)
         pass
+
+
+    def set_thumbail_size(self, new_size):
+
+        self.thumbnail_size = new_size
+
 
 
     

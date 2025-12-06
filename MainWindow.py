@@ -3,7 +3,8 @@ import random
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QPushButton, QSizePolicy,
-    QStackedWidget, QApplication, QGraphicsOpacityEffect
+    QStackedWidget, QApplication, QGraphicsOpacityEffect,
+    QCheckBox
     )
 
 from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve
@@ -23,15 +24,18 @@ class OverlayWidget(QWidget):
     """The widget that will serve as the translucent overlay."""
     def __init__(self, parent=None):
         super().__init__(parent)
+
+        self.default_animation_time = 1000
         
-        # Color presets
-        self.color_accept = "background-color: rgba(76, 175, 80, 0.55); border: 2px dashed rgb(76, 175, 80); border-radius: 4px;"
-        self.color_reject = "background-color: rgba(220, 82, 80, 0.55); border: 2px dashed rgb(220, 82, 80); border-radius: 4px;"
+        # Ovrlay presets
+        self.color_accept   = "background-color: rgba(76, 175, 80, 0.55); border: 2px dashed rgb(76, 175, 80); border-radius: 4px;"
+        self.color_reject   = "background-color: rgba(220, 82, 80, 0.55); border: 2px dashed rgb(220, 82, 80); border-radius: 4px;"
+        self.color_finished = "background-color: rgba(0, 0, 0, 0.55); border: 2px dashed rgb(0, 0, 0); border-radius: 4px;"
 
-        self.default_text = "Drop Image Files Here (PNG, JPG, GIF)"
-        self.loading_text = "Loading..."
-        self.warning_text = "No Images To Show"
-
+        self.default_text   = "Drop Image Files Here (PNG, JPG, GIF)"
+        self.loading_text   = "Loading..."
+        self.warning_text   = "No Images To Show"
+        self.finished_text  = "Slideshow Finished"
 
 
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)    
@@ -52,8 +56,8 @@ class OverlayWidget(QWidget):
         self.setGraphicsEffect(self.opacity_effect)
         self.animation = QPropertyAnimation(self.opacity_effect, b"opacity")
 
-        self.animation.setDuration(2000) 
-        self.animation.setEasingCurve(QEasingCurve.Type.InOutQuad)
+        self.animation.setDuration(self.default_animation_time) 
+        self.animation.setEasingCurve(QEasingCurve.Type.InQuart)
         
         self.start_value = self.opacity_effect.opacity()
         self.animation.setStartValue(self.start_value)
@@ -66,18 +70,16 @@ class OverlayWidget(QWidget):
     def on_animation_end(self):
         self.hide()
         self.opacity_effect.setOpacity(self.start_value)
-        # self.animation.finished.disconnect()   
 
+    def play_opacity_animation(self, new_time:int = None):
 
-    def play_opacity_animation(self): 
+        if new_time is not None:
+            self.animation.setDuration(new_time)
+        else:
+            self.animation.setDuration(self.default_animation_time)
+
         self.animation.stop()
         self.animation.start()
-
-
-    # def update_geometry(self):
-    #     """Called by the parent to ensure the overlay covers the entire area."""
-    #     if self.parentWidget():
-    #         self.setGeometry(self.parentWidget().rect())
 
 
     def show(self, state:int = 1):
@@ -86,6 +88,7 @@ class OverlayWidget(QWidget):
         1 : "Reject Files",
         2 : "No Images",
         3 : "Loading Images"
+        4 : "Finished"
         """
         self.animation.stop()
         self.on_animation_end()
@@ -102,12 +105,15 @@ class OverlayWidget(QWidget):
         elif state == 3:
             self.setStyleSheet(self.color_accept)
             self.label.setText(self.loading_text)
+        elif state == 4:
+            self.setStyleSheet(self.color_finished)
+            self.label.setText(self.finished_text)
 
         # self.update_geometry()
         super().show()
 
     def update_opacity(self):
-        print(self.styleSheet())
+        # print(self.styleSheet())
         return
 
     def resizeEvent(self, event):
@@ -124,8 +130,10 @@ class MainWindow(QMainWindow):
         self.setAcceptDrops(True)
 
         # Slideshow Settings
-        self.count = 10
-        self.time = 10
+        self.count:int = 10
+        self.time:int = 10
+        self.full_screen:bool = True
+        self.thumbnail_size:int = 200 
 
         ### Store file paths and cache thumbnails ###
         self.image_files:list = []
@@ -136,7 +144,6 @@ class MainWindow(QMainWindow):
         self.load_settings()
 
         validator = QIntValidator(1, 100)
-
 
         ##### --- Stacked Widget ---
 
@@ -181,6 +188,12 @@ class MainWindow(QMainWindow):
         self.count_input.setMaximumWidth(80)
         control_layout.addWidget(self.count_input)
 
+        # FullScreen Checkbox
+        self.full_screen_checkbox = QCheckBox("Start in FullScreen")
+        self.full_screen_checkbox.setChecked(self.full_screen)
+        self.full_screen_checkbox.stateChanged.connect(self.calc_full_screen_check)
+        control_layout.addWidget(self.full_screen_checkbox)
+
         # Start Button
         self.start_button = QPushButton("Start Session")
         self.start_button.setFixedWidth(100)
@@ -216,9 +229,10 @@ class MainWindow(QMainWindow):
 
         ##### --- Section 2: Image Preview Zone ---
              
-        self.preview_zone = PreviewZone()        
+        self.preview_zone = PreviewZone(self.thumbnail_size)        
         self.preview_zone.set_image_files(self.image_cache)
         self.preview_zone.get_item_width()
+        # self.preview_zone.set_thumbail_size(self.thumbnail_size)
                
 
         main_layout.addWidget(self.preview_zone)
@@ -268,7 +282,10 @@ class MainWindow(QMainWindow):
 
 
         ##### --- Slide Show ---
-        self.slide_show = SlideShowWidget(callback=self.reset_stack)
+        self.slide_show = SlideShowWidget(
+            end_callback = self.end_slide_show,
+            full_screen_toggle_callback = self.full_screen_toggle
+            )
         self.slide_show.hide()
 
 
@@ -284,7 +301,7 @@ class MainWindow(QMainWindow):
         self.stacked_widget.addWidget(self.slide_show)
 
 
-    def get_time_and_count(self):
+    def calc_time_and_count(self):
 
         self.count = self.count_input.text()
         self.time = self.time_input.text()
@@ -301,10 +318,13 @@ class MainWindow(QMainWindow):
             
             return
         else:
-            self.get_time_and_count()
+            self.calc_time_and_count()
+            self.calc_full_screen_check()
 
             self.stacked_widget.setCurrentIndex(1)
             self.slide_show.show()
+            if self.full_screen:
+                self.showFullScreen()
             self.slide_show.start_slide_show(self.get_slide_show_images(), self.time)
             
 
@@ -313,9 +333,13 @@ class MainWindow(QMainWindow):
         pass
 
 
-    def reset_stack(self):
+    def end_slide_show(self):
         self.stacked_widget.setCurrentIndex(0)
         self.slide_show.hide()
+        self.overlay.show(4)
+        self.overlay.play_opacity_animation()
+
+        # Pop Up overlay here
 
 
     def get_slide_show_images(self) -> list:
@@ -323,15 +347,132 @@ class MainWindow(QMainWindow):
         if not self.image_files:
             return
         
-        sample = self.image_files.copy()
+        # sample = self.image_files.copy()
 
-        random.sample(sample, min(int(self.count), len(self.image_files) -1 ))
+        sample = random.sample(self.image_files.copy(), min(int(self.count), len(self.image_files)))
         # print(sample)
-        # print(f"\033[31m{sample}\033[0m")
+        # print(f"\033[31m{len(self.image_files)}\033[0m")
+        # print(f"\033[32m{len(sample)}\033[0m")
         random.shuffle(sample)
         # print(sample)
         # print(f"\033[33m{sample}\033[0m")
         return sample
+
+
+    def calc_full_screen_check(self):
+        self.full_screen = self.full_screen_checkbox.isChecked()
+
+        return    
+
+
+    def load_image_thumbnails(self):
+
+        image_thumbnails = []
+        for file_path in self.image_files:
+            try:
+                img = Image.open(file_path)
+                img.thumbnail((400,400))
+                image_thumbnails.append(img)
+            except Exception as e:
+                print(f"Error loading image {file_path}: {e}")
+            
+
+        # print(image_thumbnails)
+        return image_thumbnails
+
+
+    def clear_image_files(self):
+        self.image_files.clear()
+        self.image_cache.clear()
+        self.preview_zone.clear_image_files()
+        self.update_image_count()
+        pass
+        
+
+    def create_separator(self):
+        """Utility to create a horizontal rule for visual separation."""
+        separator = QWidget()
+        separator.setFixedHeight(1)
+        separator.setStyleSheet("background-color: #ccc;")
+        return separator
+    
+
+    def update_image_count(self):
+        self.count_label.setText(f"{str(len(self.image_files))} total images") 
+
+    
+    def full_screen_toggle(self):
+        if self.isFullScreen():
+            self.showNormal()
+            self.slide_show.set_full_screen_icon(True)
+        else:
+            self.showFullScreen()
+            self.slide_show.set_full_screen_icon(False)
+
+
+    def load_settings(self):
+        """Loads window geometry count and time from QSettings."""
+        
+        settings = self.settings.settings_load()
+
+        # print(settings)
+
+        if settings is not None:
+            try: self.restoreGeometry(settings.value("geometry"))
+            except: pass
+
+            self.count = settings.value("count", 10, type=int)
+
+            self.time = settings.value("time", 10, type=int)
+
+            self.image_files = settings.value("images", [])
+            # print(f"\033[31m{self.image_files}\033[0m")
+
+            self.image_cache = self.load_image_thumbnails()
+            # print(f"\033[34m{self.image_cache}\033[0m")
+
+            self.thumbnail_size = settings.value("image_size", 200, type=int)
+ 
+            self.full_screen = settings.value("fullscreen", True, type=bool)
+            # print(self.full_screen)
+
+
+        else:
+            self.count = 10
+            self.time = 30
+            self.image_files = []
+            self.thumbnail_size = 200
+            self.full_screen = True
+
+    ##### --- Overwrite Functions ---
+
+    def closeEvent(self, event):
+        """Saves window geometry to QSettings and closes the secondary window."""
+
+        self.showNormal()
+        self.calc_time_and_count()
+        self.calc_full_screen_check()
+
+        settings = {
+            "geometry": self.saveGeometry(),
+            "count": self.count_input.text(),
+            "time": self.time_input.text(),
+            "fullscreen": self.full_screen,
+            # "image_size": self.preview_zone.thumbnail_size
+        }
+        if not self.image_files:
+            settings.update({"images": []})
+        else :
+            settings.update({"images": self.image_files})
+
+        if not self.preview_zone.thumbnail_size:
+            settings.update({"image_size": 200})
+        else :
+            settings.update({"image_size": self.preview_zone.thumbnail_size})
+
+        self.settings.settings_save(settings)
+
+        event.accept()
 
 
     def dragEnterEvent(self, event: QDragEnterEvent):
@@ -393,91 +534,13 @@ class MainWindow(QMainWindow):
         # self.slide_show.resizeEvent(event)
         return super().resizeEvent(event)
     
+    def keyPressEvent(self, event):
 
-    def load_image_thumbnails(self):
-
-        image_thumbnails = []
-        for file_path in self.image_files:
-            try:
-                img = Image.open(file_path)
-                img.thumbnail((400,400))
-                image_thumbnails.append(img)
-            except Exception as e:
-                print(f"Error loading image {file_path}: {e}")
-            
-
-        # print(image_thumbnails)
-        return image_thumbnails
-
-
-    def load_settings(self):
-        """Loads window geometry count and time from QSettings."""
-        
-        settings = self.settings.settings_load()
-
-        # print(settings)
-
-        if settings is not None:
-
-            
-            self.restoreGeometry(settings.value("geometry"))
-            self.count = settings.value("count")
-            self.time = settings.value("time")
-            self.image_files = settings.value("images")
-            # print(f"\033[31m{self.image_files}\033[0m")
-            self.image_cache = self.load_image_thumbnails()
-            # print(f"\033[34m{self.image_cache}\033[0m")
-            self.thumbnail_size = settings.value("image_size")
-            
-
+        if event.key() == Qt.Key.Key_Escape:
+            self.showNormal()
+            self.slide_show.set_full_screen_icon(True)
         else:
-            self.count = 10
-            self.time = 30
-            self.image_files = []
-            self.thumbnail_size = 200
+            super().keyPressEvent(event)
 
 
-    def closeEvent(self, event):
-        """Saves window geometry to QSettings and closes the secondary window."""
-        # print(self.saveGeometry())
-
-        settings = {
-            "geometry": self.saveGeometry(),
-            "count": self.count_input.text(),
-            "time": self.time_input.text()
-        }
-        if not self.image_files:
-            settings.update({"images": []})
-        else :
-            settings.update({"images": self.image_files})
-
-        if not self.preview_zone.thumbnail_size:
-            settings.update({"image_size": 200})
-        else :
-            settings.update({"image_size": self.preview_zone.thumbnail_size})
-
-        
-        # print(settings.get("images"))
-        self.settings.settings_save(settings)
-
-        event.accept()
-
-
-    def clear_image_files(self):
-        self.image_files.clear()
-        self.image_cache.clear()
-        self.preview_zone.clear_image_files()
-        self.update_image_count()
-        pass
-        
-
-    def create_separator(self):
-        """Utility to create a horizontal rule for visual separation."""
-        separator = QWidget()
-        separator.setFixedHeight(1)
-        separator.setStyleSheet("background-color: #ccc;")
-        return separator
-    
-
-    def update_image_count(self):
-        self.count_label.setText(f"{str(len(self.image_files))} total images") 
+        return
