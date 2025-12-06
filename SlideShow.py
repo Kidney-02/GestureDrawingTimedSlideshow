@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import( 
     QWidget, QLabel, QSizePolicy,
     QPushButton, QVBoxLayout, QHBoxLayout, QGridLayout,
-    QStyle
+    QStyle, QFrame, QGraphicsOpacityEffect
     )
 from PySide6.QtGui import QPixmap, QPainter, QColor, Qt, QIcon
 from PySide6.QtCore import(
@@ -103,28 +103,50 @@ class SlideShowWidget(QWidget):
             }
         """)
 
-        layout.addWidget(self.display_label, 0, 0)
+        layout.addWidget(self.display_label, 0, 0, Qt.AlignmentFlag.AlignCenter)
 
 
-        # --- 2. Top Layer (The Button Container) ---
+        # --- Button Tray ---
 
-        self.button_tray = QWidget()
-        self.button_tray.setSizePolicy(
-            QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed
-        )
+        overlay = QWidget(self)     
+        overlay.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        overlay.setMinimumSize(50, 50)
+        overlay.setObjectName("Overlay")
+        overlay.setStyleSheet("""
+            #Overlay {
+                background-color: rgba(0, 0, 0, 0);
+                border: none;
+                padding: 0px;
+            }
+        """)
+        
+        overlay_layout = QGridLayout(overlay)
+        overlay_layout.setContentsMargins(5,5,5,5)
+        overlay_layout.setColumnStretch(0,1)
+
+        layout.addWidget(overlay, 0, 0)
+
+
+        
+
+
+        self.button_tray = QWidget(self)
+        self.button_tray.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         self.button_tray.setStyleSheet("""
             QWidget {
                 background-color: rgba(0, 0, 0, 50);
                 border-radius: 4px;
-                padding: 10px;
             }
         """)
 
+        self.button_opacity_effect = QGraphicsOpacityEffect(self.button_tray)
+        self.button_tray.setGraphicsEffect(self.button_opacity_effect)
+
 
         # Create the animation object, targeting the widget's position (b"pos")
-        self.animation = QPropertyAnimation(self.button_tray, b"pos")
+        self.animation = QPropertyAnimation(self.button_opacity_effect, b"opacity")
         self.animation.setDuration(self.button_appear_time) # 300 milliseconds for a quick slide
-        self.animation.setEasingCurve(QEasingCurve.Type.OutCubic) # Smoother slide
+        self.animation.setEasingCurve(QEasingCurve.Type.InOutQuad) # Smoother slide
 
 
         # Button Layout within the Overlay Container
@@ -150,24 +172,11 @@ class SlideShowWidget(QWidget):
         button_layout.addWidget(self.btn_hide)
 
 
-        # If added to gridlayout button_tray jumps to default position when timer increment updates
-
-        layout.addWidget(
+        overlay_layout.addWidget(
             self.button_tray, 
             0, 0, 
             Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignHCenter
         )
-
-
-        # self.timer_container = QWidget()
-        # self.timer_container.setStyleSheet("""
-        #     QWidget {
-        #         background-color: rgba(0, 0, 0, 50);
-        #         border-radius: 4px;
-        #         padding: 10px;
-        #     }
-        # """)
-        # self.timer_layout = QHBoxLayout(self.timer_container)
 
 
         self.timer_display = QLabel(self.format_time(self.time))
@@ -186,12 +195,15 @@ class SlideShowWidget(QWidget):
         self.timer_display.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         self.timer_display.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        layout.addWidget(
+        overlay_layout.addWidget(
             self.timer_display, 
             0, 0, 
             Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight
         )
-                
+        
+
+        # self.button_tray.raise_()
+        # self.button_tray.show()
 
 
 
@@ -214,9 +226,9 @@ class SlideShowWidget(QWidget):
         
         self.image_files = image_files
         self.time = int(time) * 1000 # Convert seconds to miliseconds
-        print(self.time)
+        # print(self.time)
 
-        self.is_button_tray_shown = False
+        # self.is_button_tray_shown = False
 
 
         self.load_image_file(self.image_files[self.displayed_image])
@@ -234,6 +246,7 @@ class SlideShowWidget(QWidget):
 
 
     def start_timer(self):
+        """ Starts timer from beginning """
         if self.paused_offset_ms == 0:
             self.elapsed_timer.start()
         else:
@@ -243,16 +256,24 @@ class SlideShowWidget(QWidget):
 
 
     def stop_timer(self):
+        """ Stops and resets timer """
         self.timer.stop()
         # self.elapsed_timer.stop()
         self.paused_offset_ms = 0
             
     
     def pause_timer(self):
+         """ Pause Timer so it can be restarted"""
          if self.timer.isActive():
             self.timer.stop()
             
             self.paused_offset_ms += self.elapsed_timer.elapsed()
+
+
+    def resume_timer():
+        """ Resmes the timer from previous time """
+
+        pass
 
 
     def update_timer(self):
@@ -291,7 +312,7 @@ class SlideShowWidget(QWidget):
         """ Sets UI to it's current configuration. """
         
         self.set_play_button_icon()
-        self.show_hide_button_tray(0)
+        self.toggle_button_tray(0)
 
         pass
     
@@ -299,54 +320,35 @@ class SlideShowWidget(QWidget):
     def hide_button_action(self):
         """ Hide Control Tray on button click """
         self.is_button_tray_shown = False
-        self.show_hide_button_tray(self.button_appear_time)
+        self.toggle_button_tray(self.button_appear_time)
 
 
     def change_visibility(self):
         self.is_button_tray_shown = not self.is_button_tray_shown
 
 
-    def show_hide_button_tray(self, time:int = 0):
+    def toggle_button_tray(self, time:int = 0):
         """ Show or hide the Button overlay based on the control visibility parameter """
-        
-        print("AAA")
-
-        self.animation.stop()
-
-        # Disconnect any lingering hide connections
-        try:
-            self.animation.finished.disconnect()
-        except TypeError:
-            pass
         
         self.animation.setDuration(time)
 
-        # Set start and end points for the slide up
-        x_pos = int((self.width() - self.button_tray.width()) * 0.5)
+        try:
+            self.animation.finished.disconnect()
+        except Exception as e:
+            pass 
         
-        if not self.is_button_tray_shown:
-            # if False Hide Tray
-            y_end = self.height()
-            y_start = y_end - self.button_tray.height()
-            
-        else:
+        if self.is_button_tray_shown:
             # If True Show Tray
-            y_start = self.height()
-            y_end = y_start - self.button_tray.height()
-         
-        
-        # print(y_start,y_end) 
+            end_opacity = 1
+            self.button_tray.show()
+        else:
+            # if False Hide Tray    
+            end_opacity = 0
+            self.animation.finished.connect(self.button_tray.hide)
 
-        self.animation.setStartValue(QPoint(x_pos, y_start))
-        self.animation.setEndValue(QPoint(x_pos, y_end))
+        self.animation.setStartValue(self.button_opacity_effect.opacity())
+        self.animation.setEndValue(end_opacity)
 
-        self.animation.finished.connect(lambda: (
-            self.button_tray.move(x_pos, y_end),
-            self.animation.finished.disconnect(),
-        ))
-
-        
-        # self.button_tray.show()
         self.animation.start()
         
 
@@ -365,10 +367,14 @@ class SlideShowWidget(QWidget):
         if force_play is False:
             
             self.is_playing = not self.is_playing
-            self.pause_timer()
+            if self.is_playing:
+                self.start_timer()
+            else:
+                self.pause_timer()
 
         elif force_play:
             self.is_playing = True
+            self.start_timer()
 
         self.set_play_button_icon()
 
@@ -502,10 +508,12 @@ class SlideShowWidget(QWidget):
         
         # Invert visibility and show or hide the button tray
         self.change_visibility()
-        self.show_hide_button_tray(self.button_appear_time)        
+        self.toggle_button_tray(self.button_appear_time)        
 
         return super().mousePressEvent(event)
     
+
+
     
 
     # def _update_status_label(self, current_image_num, total_images):
