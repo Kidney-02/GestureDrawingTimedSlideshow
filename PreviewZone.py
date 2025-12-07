@@ -5,7 +5,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import QWheelEvent, QShowEvent
 from PySide6.QtCore import Qt
-from PIL import ImageQt
+from PIL import ImageQt, Image
 
 
 
@@ -119,9 +119,7 @@ class PreviewZone(QWidget):
         
        
     def recalculate_and_redraw(self, force_redraw:bool = False):
-        """
-        Calculates the new maximum number of columns and rebuilds the grid.
-        """
+        """ Calculates the new maximum number of columns and rebuilds the grid. """
         if not self.image_thumbnails:
             self.clear_images()
             return
@@ -238,7 +236,7 @@ class PreviewZone(QWidget):
         self.recalculate_and_redraw()
 
 
-    def set_image_files(self, images:dict):
+    def set_image_files(self, images:list):
 
         if bool(images):
             # print(f"\033[33m{images}\033[0m")
@@ -246,6 +244,17 @@ class PreviewZone(QWidget):
         else:
             self.clear_image_files()
             return
+        
+        self.recalculate_and_redraw(True)
+        pass
+
+
+    def update_image_files(self, images:list):
+        if not bool(images):
+            return
+        for img in images:
+            if img not in self.image_thumbnails:
+                self.image_thumbnails.append(img)
         
         self.recalculate_and_redraw(True)
         pass
