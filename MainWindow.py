@@ -660,6 +660,8 @@ class MainWindow(QMainWindow):
                         new_images.append(file_path)
 
         else:
+            # download images found at the URL
+
             # for url in event.mimeData().urls(): 
             #     if url.isLocalFile() and url.toLocalFile().lower().endswith(('.png', '.jpg', '.jpeg')):
             #         file_path = url.toLocalFile()
