@@ -33,7 +33,7 @@ ICO_FILE_PATH = "Icon.ico"
 
 class OverlayWidget(QWidget):
     """The widget that will serve as the translucent overlay."""
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, possible_types:tuple = ("png", "jpg")):
         super().__init__(parent)
 
         self.default_animation_time = 1000
@@ -43,14 +43,15 @@ class OverlayWidget(QWidget):
         self.color_reject   = "background-color: rgba(220, 82, 80, 0.55); border: 2px dashed rgb(220, 82, 80); border-radius: 4px;"
         self.color_finished = "background-color: rgba(0, 0, 0, 0.55); border: 2px dashed rgb(0, 0, 0); border-radius: 4px;"
 
-        self.default_text   = "Drop Image Files Here (PNG, JPG)"
+        self.default_text   = f"Drop Image Files Here {", ".join(possible_types).upper()}"
+        self.drop_url_text  = f"Drop Web URL Here"
         self.loading_text   = "Loading..."
         self.warning_text   = "No Images To Show"
         self.finished_text  = "Slideshow Finished"
 
 
-        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)    
-
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        
         # Add a message label to the center
         self.label = QLabel(self.default_text)
         self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -100,6 +101,7 @@ class OverlayWidget(QWidget):
         2 : "No Images",
         3 : "Loading Images"
         4 : "Finished"
+        5 : "Accept Web URL"
         """
         self.animation.stop()
         self.on_animation_end()
@@ -119,6 +121,9 @@ class OverlayWidget(QWidget):
         elif state == 4:
             self.setStyleSheet(self.color_finished)
             self.label.setText(self.finished_text)
+        elif state == 5:
+            self.setStyleSheet(self.color_accept)
+            self.label.setText(self.drop_url_text)
 
         # self.update_geometry()
         super().show()
@@ -139,6 +144,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Drawing Practicer")
         self.setWindowIcon(QIcon(ICO_FILE_PATH))
         self.setAcceptDrops(True)
+        self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
 
         # Slideshow Settings
         self.count:int = 10
@@ -326,7 +332,7 @@ class MainWindow(QMainWindow):
 
 
         ##### --- The Overlay ---
-        self.overlay = OverlayWidget(self)
+        self.overlay = OverlayWidget(self, self.possible_formats)
         self.overlay.hide() # Set overlay hidden on Start
 
         # Overlay with grid Layout
@@ -600,21 +606,26 @@ class MainWindow(QMainWindow):
     def dragEnterEvent(self, event: QDragEnterEvent):
         """Accepts the drag if it contains acceptable file paths (URIs)."""
         if event.mimeData().hasUrls():
-            can_accept = any(
+
+
+            # Local File = 0, Web URL = 5, Unacceptable file = 1
+            if any(
                 url.isLocalFile() and url.toLocalFile().lower().endswith(self.possible_formats)
                 for url in event.mimeData().urls()
-            )
-            # print(f"\033[31m{event.mimeData().urls()}\033[0m")
-            
-            if can_accept:
+                ):
                 event.acceptProposedAction()
-
+                self.overlay.show(0)
+            elif any(
+                not url.isLocalFile() and url.scheme().lower().startswith(('http', 'https'))
+                for url in event.mimeData().urls()
+                ):
+                event.acceptProposedAction()
+                self.overlay.show(5)    
             else:
-                
+                self.overlay.show(1)
                 event.ignore()
             
-            # for show True = 1, False = 0
-            self.overlay.show(1 - int(can_accept))
+            
             self.overlay.raise_()
         else:
             event.ignore()
@@ -634,22 +645,32 @@ class MainWindow(QMainWindow):
 
         new_images = []
 
-        # Add to the image list and cache thumbnails
-        for url in event.mimeData().urls(): 
-            if url.isLocalFile() and url.toLocalFile().lower().endswith(('.png', '.jpg', '.jpeg')):
-                file_path = url.toLocalFile()
+        if any(
+            url.isLocalFile() for url in event.mimeData().urls()
+            ):
+            # Process Local Files
+            for url in event.mimeData().urls(): 
+                if url.isLocalFile() and url.toLocalFile().lower().endswith(('.png', '.jpg', '.jpeg')):
+                    file_path = url.toLocalFile()
 
-                if self.in_temp_folder(file_path):
-                    file_path = self.save_from_temp(file_path)
-                    print(file_path)
+                    if self.in_temp_folder(file_path):
+                        file_path = self.save_from_temp(file_path)
 
-                if file_path not in self.image_files and file_path is not None:
-                    new_images.append(file_path)
+                    if file_path not in self.image_files and file_path is not None:
+                        new_images.append(file_path)
 
-        # Cache Images then add them to the list
-        
-        # Reset instruction label style
-        
+        else:
+            # for url in event.mimeData().urls(): 
+            #     if url.isLocalFile() and url.toLocalFile().lower().endswith(('.png', '.jpg', '.jpeg')):
+            #         file_path = url.toLocalFile()
+
+            #         if self.in_temp_folder(file_path):
+            #             file_path = self.save_from_temp(file_path)
+
+            #         if file_path not in self.image_files and file_path is not None:
+            #             new_images.append(file_path)
+            pass
+
           
         self.preview_zone.update_image_files(self.cache_new_image_thumbnails(new_images))       
                
