@@ -4,6 +4,8 @@ from pathlib import Path
 import os
 import shutil
 from PIL import Image
+import requests
+from bs4 import BeautifulSoup as bs
 
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -156,7 +158,7 @@ class MainWindow(QMainWindow):
         ### Store file paths and cache thumbnails ###
         self.image_files:list = []
         self.image_cache:list = [] # caches thumbnail for preview
-        self.possible_formats:tuple = ('.png', '.jpg', '.jpeg')
+        self.possible_formats:tuple = ('.png', '.jpg', '.jpeg', '.webp')
         
         # --- QSettings setup ---
         self.settings = Settings()
@@ -401,6 +403,11 @@ class MainWindow(QMainWindow):
             # Update the QLineEdit with the selected path
             self.save_path_input.setText(directory)
             self.save_path = directory
+        elif directory == "":
+            directory = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.DownloadLocation)
+            self.save_path_input.setText(directory)
+            self.save_path = directory
+            
         pass
 
 
@@ -511,8 +518,10 @@ class MainWindow(QMainWindow):
 
     def save_from_temp(self, file_path:str) -> str:
         """Put image to save path from temp folder and return new path"""
+
         
-        if not Path(self.save_path).exists():
+        if not Path(self.save_path).exists() or Path(self.save_path) == "":
+
             return None
 
         filename = Path(file_path).name
@@ -607,7 +616,6 @@ class MainWindow(QMainWindow):
         """Accepts the drag if it contains acceptable file paths (URIs)."""
         if event.mimeData().hasUrls():
 
-
             # Local File = 0, Web URL = 5, Unacceptable file = 1
             if any(
                 url.isLocalFile() and url.toLocalFile().lower().endswith(self.possible_formats)
@@ -622,9 +630,8 @@ class MainWindow(QMainWindow):
                 event.acceptProposedAction()
                 self.overlay.show(5)    
             else:
-                self.overlay.show(1)
                 event.ignore()
-            
+                self.overlay.show(1)
             
             self.overlay.raise_()
         else:
@@ -645,12 +652,13 @@ class MainWindow(QMainWindow):
 
         new_images = []
 
-        if any(
-            url.isLocalFile() for url in event.mimeData().urls()
-            ):
+        if event.mimeData().urls()[0].isLocalFile():
+        # any(
+        #     # url.isLocalFile() for url in event.mimeData().urls()
+        #     ):
             # Process Local Files
             for url in event.mimeData().urls(): 
-                if url.isLocalFile() and url.toLocalFile().lower().endswith(('.png', '.jpg', '.jpeg')):
+                if url.toLocalFile().lower().endswith(self.possible_formats):
                     file_path = url.toLocalFile()
 
                     if self.in_temp_folder(file_path):
@@ -659,18 +667,43 @@ class MainWindow(QMainWindow):
                     if file_path not in self.image_files and file_path is not None:
                         new_images.append(file_path)
 
-        else:
-            # download images found at the URL
+        elif not event.mimeData().urls()[0].isLocalFile():
 
-            # for url in event.mimeData().urls(): 
-            #     if url.isLocalFile() and url.toLocalFile().lower().endswith(('.png', '.jpg', '.jpeg')):
-            #         file_path = url.toLocalFile()
 
-            #         if self.in_temp_folder(file_path):
-            #             file_path = self.save_from_temp(file_path)
+            ### TEST THIS
 
-            #         if file_path not in self.image_files and file_path is not None:
-            #             new_images.append(file_path)
+            headers = {"Referer" : "https://www.pinterest.com/"}
+            try:
+                target_url =  event.mimeData().urls()[0]
+
+                # --- CASE 1: Pinterest ---
+                if "pinterest.com/pin/" in target_url:                    
+                    res = requests.get(target_url, headers=headers, timeout=10)
+                    soup = bs(res.text, 'html.parser')
+                    og_tag = soup.find("meta", property="og:image")
+                    if og_tag:
+                        # Upgrade to highest resolution
+                        target_url = og_tag["content"].replace("/\d+x/", "/originals/")
+                else:
+                    print(f"not pinterest link: {target_url}")
+
+
+                # --- DOWNLOAD STAGE ---
+                img_res = requests.get(target_url, headers=headers, stream=True, timeout=15)
+                img_res.raise_for_status()
+
+                content_type = img_res.headers.get('Content-Type', '').lower()
+                ext = content_type.split('/')[-1] if 'image/' in content_type else 'jpg'
+
+                save_path = os.path.abspath(f"grabbed_image_{hash(target_url)}.{ext}")
+
+
+            except Exception as e:
+                self.error.emit(str(e))
+
+            
+ 
+
             pass
 
           
