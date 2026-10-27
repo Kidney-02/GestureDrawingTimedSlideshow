@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
     QCheckBox, QFileDialog
     )
 from PySide6.QtCore import (
-    Qt, QPropertyAnimation, QEasingCurve, QStandardPaths
+    Qt, QPropertyAnimation, QEasingCurve, QStandardPaths, Signal
     )
 from PySide6.QtGui import (
     QIntValidator, QDragEnterEvent, QDragLeaveEvent, QDropEvent,
@@ -24,6 +24,9 @@ from PySide6.QtGui import (
 from PreviewZone import *
 from Settings import *
 from SlideShow import *
+from UrlParser import *
+from ImageDownloader import *
+
 
 SVG_FOLDER = """
 <svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" viewBox="0 0 24 24">
@@ -140,6 +143,9 @@ class OverlayWidget(QWidget):
 
 
 class MainWindow(QMainWindow):
+
+    error = Signal(str)
+
     def __init__(self):
         super().__init__()
         
@@ -570,7 +576,7 @@ class MainWindow(QMainWindow):
             self.full_screen = settings.value("fullscreen", True, type=bool)
             # print(self.full_screen)
 
-            self.save_path = settings.value("save_path", "Select Directory", type=str)
+            self.save_path = settings.value("save_path", str(Path.home() / "Downloads"), type=str)
 
 
         else:
@@ -652,6 +658,8 @@ class MainWindow(QMainWindow):
 
         new_images = []
 
+        # print (event.mimeData().urls()[0])
+
         if event.mimeData().urls()[0].isLocalFile():
         # any(
         #     # url.isLocalFile() for url in event.mimeData().urls()
@@ -670,45 +678,56 @@ class MainWindow(QMainWindow):
         elif not event.mimeData().urls()[0].isLocalFile():
 
 
+            ### Get Image from link
+
             ### TEST THIS
 
-            headers = {"Referer" : "https://www.pinterest.com/"}
-            try:
-                target_url =  event.mimeData().urls()[0]
 
-                # --- CASE 1: Pinterest ---
-                if "pinterest.com/pin/" in target_url:                    
-                    res = requests.get(target_url, headers=headers, timeout=10)
-                    soup = bs(res.text, 'html.parser')
-                    og_tag = soup.find("meta", property="og:image")
-                    if og_tag:
-                        # Upgrade to highest resolution
-                        target_url = og_tag["content"].replace("/\d+x/", "/originals/")
+            try:
+                target_url =  event.mimeData().urls()[0].toString()
+
+                print(target_url)
+                # Pinterest
+
+
+                if is_pinterest_board(target_url):
+                    print("Board")
+                    new_images = download_pinterest_board(target_url, self.save_path)
+                    pass
+                elif is_pinterest_image(target_url):
+                    print("Pinterest Image")
+                    new_images = download_image(target_url, self.save_path)
+                    pass
+                elif is_pinterest_pin(target_url):
+                    print("Pin")
+                    new_images = download_image(target_url, self.save_path)
+                    pass
                 else:
                     print(f"not pinterest link: {target_url}")
+                    new_images = download_image(target_url, self.save_path)
 
-
-                # --- DOWNLOAD STAGE ---
-                img_res = requests.get(target_url, headers=headers, stream=True, timeout=15)
-                img_res.raise_for_status()
-
-                content_type = img_res.headers.get('Content-Type', '').lower()
-                ext = content_type.split('/')[-1] if 'image/' in content_type else 'jpg'
-
-                save_path = os.path.abspath(f"grabbed_image_{hash(target_url)}.{ext}")
+                ## Doesn't work
+                # # --- DOWNLOAD STAGE ---
+                #
+                # headers = {"Referer": "https://www.pinterest.com/",
+                #            "Referer": "https://i.pinimg.com/"}
+                # img_res = requests.get(target_url, headers=headers, stream=True, timeout=15)
+                # img_res.raise_for_status()
+                #
+                # content_type = img_res.headers.get('Content-Type', '').lower()
+                # ext = content_type.split('/')[-1] if 'image/' in content_type else 'jpg'
+                #
+                # save_path = os.path.abspath(f"grabbed_image_{hash(target_url)}.{ext}")
 
 
             except Exception as e:
                 self.error.emit(str(e))
-
-            
- 
-
+                print (e)
             pass
 
           
         self.preview_zone.update_image_files(self.cache_new_image_thumbnails(new_images))       
-               
+
         self.image_files += new_images 
         self.update_image_count()
 
